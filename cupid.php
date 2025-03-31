@@ -266,72 +266,6 @@
             flex-grow: 1;
         }
         
-        /* Modal styles */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.5);
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-            padding: 20px;
-        }
-        
-        .modal-content {
-            background-color: var(--light);
-            padding: 30px;
-            border-radius: 10px;
-            max-width: 500px;
-            width: 100%;
-            position: relative;
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-        
-        .close-btn {
-            position: absolute;
-            right: 20px;
-            top: 15px;
-            font-size: 24px;
-            cursor: pointer;
-            color: #666;
-            z-index: 10;
-        }
-        
-        .modal h2 {
-            margin-bottom: 20px;
-            font-size: 24px;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        .form-group label {
-            display: block;
-            margin-bottom: 8px;
-            font-weight: 500;
-        }
-        
-        .form-group input,
-        .form-group textarea,
-        .form-group select {
-            width: 100%;
-            padding: 12px 15px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 16px;
-        }
-        
-        .form-group textarea {
-            height: 120px;
-            resize: vertical;
-        }
-        
         footer {
             background-color: var(--dark);
             color: var(--light);
@@ -576,10 +510,6 @@
             .section-header h2 {
                 font-size: 24px;
             }
-            
-            .modal-content {
-                padding: 20px;
-            }
         }
          /*Overlay for mobile menu*/
              @media (max-width: 480px) {
@@ -609,7 +539,7 @@
     <header>
         <div class="container">
             <div class="header-content">
-                <a href="#" class="logo">
+                <a href="cupid.php" class="logo">
                     <img src="../assets/images/cupid_nobg.png" alt="Cupid" id="logo-img" style="height: 80px;">
                 </a>
                 <div class="menu-toggle" id="menu-toggle">
@@ -621,8 +551,8 @@
                     <div class="close-menu" id="close-menu">&times;</div>
                     <ul>
                         <li><a href="#features">Fitur</a></li>
-                        <li><a href="#" id="login-btn">Masuk</a></li>
-                        <li><a href="#" id="register-btn" class="btn">Daftar</a></li>
+                        <li><a href="login.php" id="login-btn">Masuk</a></li>
+                        <li><a href="register.php" id="register-btn" class="btn">Daftar</a></li>
                     </ul>
                 </nav>
             </div>
@@ -633,9 +563,9 @@
     <section class="hero">
         <div class="container">
             <div class="hero-content">
-                <h1>Temukan <span>Pasanganmu</span> Di <img src="../assets/images/cupid_nobg.png" alt="Cupid" style="height: 160px; vertical-align: middle; display: inline-block;"></h1>
+             <h1>Temukan <span>Pasanganmu</span> Di <img src="../assets/images/cupid_nobg.png" alt="Cupid" style="height: 160px; vertical-align: middle; display: inline-block;"></h1>
                 <p>Platform dimana kamu dapat menemukan pasangan yang cocok berdasarkan ketertarikan, hobi, dan tujuan yang sama. Apakah kamu mencari teman, partner belajar, atau romansa, Cupid membantu kamu terhubung dengan orang yang tepat.</p>
-                <a href="#" class="btn" id="get-started-btn">Mulai Sekarang</a>
+                <a href="register.php" class="btn" id="get-started-btn">Mulai Sekarang</a>
             </div>
             <div class="hero-image">
                     <!--<img src="../assets/images/cupid_nobg.png" alt="Cupid Dating App Preview" style="max-width: 200px; width: 100%; opacity: 0.2;">-->
@@ -657,7 +587,7 @@
                     </div>
                     <h3>Profile Creation</h3>
                     <p>Buat profil dengan minat, hobi, dan apa yang kamu cari (teman, partner belajar, atau romansa).</p>
-                    <a href="#" class="btn btn-outline">Buat Profil</a>
+                    <a href="register.php" class="btn btn-outline">Buat Profil</a>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
@@ -665,7 +595,7 @@
                     </div>
                     <h3>Anonymous Crush Menfess</h3>
                     <p>Kirim pesan anonim ke crush kamu. Jika keduanya saling suka, nama akan terungkap!</p>
-                    <a href="#" class="btn btn-outline">Kirim Menfess</a>
+                    <a href="register.php" class="btn btn-outline">Kirim Menfess</a>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
@@ -673,7 +603,7 @@
                     </div>
                     <h3>Blind Chat</h3>
                     <p>Chat dengan mahasiswa acak tanpa melihat profil mereka terlebih dahulu.</p>
-                    <a href="#" class="btn btn-outline">Mulai Chat</a>
+                    <a href="register.php" class="btn btn-outline">Mulai Chat</a>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon">
@@ -681,80 +611,27 @@
                     </div>
                     <h3>Compatibility Test</h3>
                     <p>Kuis untuk mencocokkan mahasiswa berdasarkan kepribadian, jurusan, dan minat.</p>
-                    <a href="#" class="btn btn-outline">Ikuti Tes</a>
+                    <a href="register.php" class="btn btn-outline">Ikuti Tes</a>
                 </div>
             </div>
         </div>
     </section>
-
-   <!-- Login Modal (NO LONGER USED) -->
-    <div class="modal" id="login-modal">
-        <div class="modal-content">
-            <span class="close-btn" id="close-login">&times;</span>
-            <h2>Masuk ke Cupid</h2>
-            <form id="login-form" action="login.php" method="post">
-                <div class="form-group">
-                    <label for="login-email">Email</label>
-                    <input type="email" id="login-email" name="email" required>
-                </div>
-                <div class="form-group">
-                    <label for="login-password">Password</label>
-                    <input type="password" id="login-password" name="password" required>
-                </div>
-                <button type="submit" class="btn">Masuk</button>
-                <p style="text-align: center; margin-top: 20px;">
-                    Belum punya akun? <a href="register.php" id="switch-to-register">Daftar</a>
-                </p>
-            </form>
-        </div>
-    </div>
-
-    <!-- Register Modal (NO LONGER USED) -->
-    <div class="modal" id="register-modal">
-        <div class="modal-content">
-            <span class="close-btn" id="close-register">&times;</span>
-            <h2>Daftar di Cupid</h2>
-            <form id="register-form" action="register.php" method="post">
-                <div class="form-group">
-                    <label for="register-name">Nama Lengkap</label>
-                    <input type="text" id="register-name" name="name" required>
-                </div>
-                <div class="form-group">
-                    <label for="register-email">Email</label>
-                    <input type="email" id="register-email" name="email" required placeholder="email@student.president.ac.id">
-                    <small style="color: #666; display: block; margin-top: 5px;">Gunakan email dengan domain student.president.ac.id</small>
-                </div>
-                <div class="form-group">
-                    <label for="register-password">Password</label>
-                    <input type="password" id="register-password" name="password" required>
-                </div>
-                <div class="form-group">
-                    <label for="register-confirm">Konfirmasi Password</label>
-                    <input type="password" id="register-confirm" name="confirm_password" required>
-                </div>
-                <button type="submit" class="btn">Daftar</button>
-                <p style="text-align: center; margin-top: 20px;">
-                    Sudah punya akun? <a href="login.php" id="switch-to-login">Masuk</a>
-                </p>
-            </form>
-        </div>
-    </div>
     
     <!-- Footer -->
     <footer>
         <div class="container">
             <div class="footer-content">
                 <div class="footer-about">
-                    <a href="#" class="footer-logo">Cupid</a>
+                    <a href="cupid.php" class="footer-logo">Cupid</a>
                     <p>Platform untuk menemukan pasangan yang cocok berdasarkan minat, hobi, dan tujuan yang sama.</p>
                 </div>
                 <div class="footer-links-section">
                     <h3 class="footer-heading">Fitur</h3>
                     <ul class="footer-links">
-                        <li><a href="#">Profile Creation</a></li>
-                        <li><a href="#">Anonymous Crush Menfess</a></li>
-                        <li><a href="#">Blind Chat</a></li>
-                        <li><a href="#">Compatibility Test</a></li>
+                        <li><a href="register.php">Profile Creation</a></li>
+                        <li><a href="register.php">Anonymous Crush Menfess</a></li>
+                        <li><a href="register.php">Blind Chat</a></li>
+                        <li><a href="register.php">Compatibility Test</a></li>
                     </ul>
                 </div>
                 <div class="footer-links-section">
@@ -786,8 +663,13 @@
         // Mobile menu functionality
         const menuToggle = document.getElementById('menu-toggle');
         const nav = document.getElementById('nav');
-        const overlay = document.getElementById('overlay');
         const closeMenu = document.getElementById('close-menu');
+        
+        // Create overlay element 
+        const overlay = document.createElement('div');
+        overlay.className = 'overlay';
+        overlay.id = 'overlay';
+        document.body.appendChild(overlay);
         
         menuToggle.addEventListener('click', function() {
             nav.classList.add('active');
@@ -813,114 +695,6 @@
                 }
             });
         });
-
-        // Modal functionality
-        const loginBtn = document.getElementById('login-btn');
-        const registerBtn = document.getElementById('register-btn');
-        const getStartedBtn = document.getElementById('get-started-btn');
-        const loginModal = document.getElementById('login-modal');
-        const registerModal = document.getElementById('register-modal');
-        const closeLogin = document.getElementById('close-login');
-        const closeRegister = document.getElementById('close-register');
-        const switchToRegister = document.getElementById('switch-to-register');
-        const switchToLogin = document.getElementById('switch-to-login');
-
-        // Open login modal
-        loginBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            loginModal.style.display = 'flex';
-            document.body.style.overflow = 'hidden';
-        });
-
-        // Open register modal
-        registerBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            registerModal.style.display = 'flex';
-            document.body.style.overflow = 'hidden';
-        });
-
-        // Get started button
-        getStartedBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            registerModal.style.display = 'flex';
-            document.body.style.overflow = 'hidden';
-        });
-
-        // Close login modal
-        closeLogin.addEventListener('click', function() {
-            loginModal.style.display = 'none';
-            document.body.style.overflow = '';
-        });
-
-        // Close register modal
-        closeRegister.addEventListener('click', function() {
-            registerModal.style.display = 'none';
-            document.body.style.overflow = '';
-        });
-
-        // Switch to register form
-        switchToRegister.addEventListener('click', function(e) {
-            e.preventDefault();
-            loginModal.style.display = 'none';
-            registerModal.style.display = 'flex';
-        });
-
-        // Switch to login form
-        switchToLogin.addEventListener('click', function(e) {
-            e.preventDefault();
-            registerModal.style.display = 'none';
-            loginModal.style.display = 'flex';
-        });
-
-        // Close modals when clicking outside
-        window.addEventListener('click', function(e) {
-            if (e.target == loginModal) {
-                loginModal.style.display = 'none';
-                document.body.style.overflow = '';
-            }
-            if (e.target == registerModal) {
-                registerModal.style.display = 'none';
-                document.body.style.overflow = '';
-            }
-        });
-
-        // Form submissions
-        const loginForm = document.getElementById('login-form');
-        const registerForm = document.getElementById('register-form');
-
-        loginForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const email = document.getElementById('login-email').value;
-            const password = document.getElementById('login-password').value;
-            
-            // Here you would normally send an AJAX request to your PHP backend
-            console.log('Login attempt:', email, password);
-            
-            // Simulate successful login
-            alert('Login successful! Redirecting to dashboard...');
-            window.location.href = 'dashboard.php';
-        });
-
-        registerForm.addEventListener('submit', function(e) {
-            e.preventDefault();
-            const name = document.getElementById('register-name').value;
-            const email = document.getElementById('register-email').value;
-            const password = document.getElementById('register-password').value;
-            const confirm = document.getElementById('register-confirm').value;
-            
-            if (password !== confirm) {
-                alert('Passwords do not match!');
-                return;
-            }
-            
-            // Here you would normally send an AJAX request to your PHP backend
-            console.log('Register attempt:', name, email, password);
-            
-            // Simulate successful registration
-            alert('Registration successful! Please check your email to verify your account.');
-            registerModal.style.display = 'none';
-            document.body.style.overflow = '';
-        });
         
         // Responsive adjustments
         window.addEventListener('resize', function() {
@@ -933,8 +707,7 @@
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function(e) {
                 if (this.getAttribute('href') !== '#' && this.getAttribute('id') !== 'login-btn' && 
-                    this.getAttribute('id') !== 'register-btn' && this.getAttribute('id') !== 'get-started-btn' &&
-                    this.getAttribute('id') !== 'switch-to-register' && this.getAttribute('id') !== 'switch-to-login') {
+                    this.getAttribute('id') !== 'register-btn' && this.getAttribute('id') !== 'get-started-btn') {
                     e.preventDefault();
                     const targetId = this.getAttribute('href');
                     const targetElement = document.querySelector(targetId);

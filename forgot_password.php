@@ -1,6 +1,6 @@
 <?php
-// File: register.php
-// Halaman dan proses pendaftaran
+// File: forgot_password.php
+// Halaman dan proses lupa password
 
 // Start session
 session_start();
@@ -14,69 +14,115 @@ if (isset($_SESSION['user_id'])) {
 }
 
 // Inisialisasi variabel
-$name = '';
 $email = '';
 $error = '';
 $success = '';
+$token = '';
+$show_reset_form = false;
 
-// Pre-fill email if coming from login page redirect
-if (isset($_GET['email'])) {
-    $email = sanitizeInput($_GET['email']);
+// Cek jika ada token reset password
+if (isset($_GET['token']) && !empty($_GET['token'])) {
+    $token = $_GET['token'];
+    
+    // Verifikasi token
+    $stmt = $conn->prepare("SELECT * FROM users WHERE reset_token = ? AND reset_token_expiry > NOW()");
+    $stmt->bind_param("s", $token);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result->num_rows === 1) {
+        // Token valid, tampilkan form reset password
+        $show_reset_form = true;
+    } else {
+        $error = 'Token reset password tidak valid atau sudah kedaluwarsa.';
+    }
 }
 
-// Proses form registrasi
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Ambil data dari form
-    $name = trim($_POST['name']);
-    $email = trim($_POST['email']);
+// Proses form reset password
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reset_password'])) {
+    $token = $_POST['token'];
     $password = $_POST['password'];
     $confirm_password = $_POST['confirm_password'];
     
-    // Validasi input
-    if (empty($name) || empty($email) || empty($password) || empty($confirm_password)) {
+    // Validasi password
+    if (empty($password) || empty($confirm_password)) {
         $error = 'Harap isi semua field.';
     } elseif ($password !== $confirm_password) {
         $error = 'Password konfirmasi tidak cocok.';
     } elseif (strlen($password) < 6) {
         $error = 'Password harus minimal 6 karakter.';
-    } 
-    // Validasi domain email
-    elseif (!preg_match('/@student\.president\.ac\.id$/', $email)) {
+    } else {
+        // Verifikasi token
+        $stmt = $conn->prepare("SELECT * FROM users WHERE reset_token = ? AND reset_token_expiry > NOW()");
+        $stmt->bind_param("s", $token);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result->num_rows === 1) {
+            $user = $result->fetch_assoc();
+            
+            // Hash password baru
+            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+            
+            // Update password dan reset token
+            $update_stmt = $conn->prepare("UPDATE users SET password = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?");
+            $update_stmt->bind_param("si", $hashed_password, $user['id']);
+            
+            if ($update_stmt->execute()) {
+                $success = 'Password berhasil diubah! Silakan login dengan password baru Anda.';
+                $show_reset_form = false;
+            } else {
+                $error = 'Terjadi kesalahan saat mengubah password: ' . $conn->error;
+            }
+        } else {
+            $error = 'Token reset password tidak valid atau sudah kedaluwarsa.';
+        }
+    }
+}
+
+// Proses form permintaan reset password
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_reset'])) {
+    $email = sanitizeInput($_POST['email']);
+    
+    // Validasi email
+    if (empty($email)) {
+        $error = 'Harap masukkan alamat email Anda.';
+    } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $error = 'Format email tidak valid.';
+    } elseif (!preg_match('/@student\.president\.ac\.id$/', $email)) {
         $error = 'Hanya email dengan domain student.president.ac.id yang diperbolehkan.';
     } else {
-        // Cek jika email sudah terdaftar
+        // Cek jika email ada di database
         $stmt = $conn->prepare("SELECT * FROM users WHERE email = ?");
         $stmt->bind_param("s", $email);
         $stmt->execute();
         $result = $stmt->get_result();
         
-        if ($result->num_rows > 0) {
-            $error = 'Email sudah terdaftar. Silakan <a href="login.php">login</a>.';
+        if ($result->num_rows === 0) {
+            $error = 'Email tidak terdaftar.';
         } else {
-            // Hash password
-            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+            $user = $result->fetch_assoc();
             
-            // Generate verification token
-            $verification_token = bin2hex(random_bytes(32));
+            // Generate token reset password
+            $reset_token = bin2hex(random_bytes(32));
+            $expiry = date('Y-m-d H:i:s', strtotime('+1 hour')); // Token berlaku 1 jam
             
-            // Insert new user with verification token and unverified status
-            $insert_stmt = $conn->prepare("INSERT INTO users (name, email, password, email_verified, verification_token) VALUES (?, ?, ?, 0, ?)");
-            $insert_stmt->bind_param("ssss", $name, $email, $hashed_password, $verification_token);
+            // Simpan token di database
+            $update_stmt = $conn->prepare("UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?");
+            $update_stmt->bind_param("ssi", $reset_token, $expiry, $user['id']);
             
-            if ($insert_stmt->execute()) {
-                $user_id = $conn->insert_id;
-                
-                // Kirim email verifikasi
+            if ($update_stmt->execute()) {
+                // Kirim email reset password
                 $to = $email;
-                $subject = "Verifikasi Email Cupid";
+                $subject = "Reset Password Cupid";
                 
-                // URL untuk verifikasi (sesuaikan dengan domain Anda)
-                $verification_url = "https://" . $_SERVER['HTTP_HOST'] . "/verify.php?token=" . $verification_token;
+                // URL untuk reset password
+                $reset_url = "https://" . $_SERVER['HTTP_HOST'] . "/forgot_password.php?token=" . $reset_token;
                 
                 $message = "
                 <html>
                 <head>
-                    <title>Verifikasi Email Cupid</title>
+                    <title>Reset Password Cupid</title>
                     <style>
                         body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
                         .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -93,15 +139,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <h1>Cupid</h1>
                         </div>
                         <div class='content'>
-                            <h2>Halo $name,</h2>
-                            <p>Terima kasih telah mendaftar di Cupid. Untuk melanjutkan, silakan verifikasi alamat email Anda dengan mengklik tombol di bawah ini:</p>
+                            <h2>Halo " . htmlspecialchars($user['name']) . ",</h2>
+                            <p>Kami menerima permintaan untuk reset password akun Cupid Anda. Klik tombol di bawah ini untuk mengatur password baru:</p>
                             <p style='text-align: center;'>
-                                <a href='$verification_url' class='button'>Verifikasi Email</a>
+                                <a href='$reset_url' class='button'>Reset Password</a>
                             </p>
                             <p>Atau Anda dapat menyalin dan menempelkan URL berikut ke browser Anda:</p>
-                            <p>$verification_url</p>
-                            <p>Link verifikasi ini akan kedaluwarsa dalam 24 jam.</p>
-                            <p>Jika Anda tidak merasa mendaftar di Cupid, silakan abaikan email ini.</p>
+                            <p>$reset_url</p>
+                            <p>Link reset password ini akan kedaluwarsa dalam 1 jam.</p>
+                            <p>Jika Anda tidak meminta reset password, silakan abaikan email ini.</p>
                         </div>
                         <div class='footer'>
                             &copy; " . date('Y') . " Cupid. All rights reserved.
@@ -118,12 +164,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // Kirim email
                 if (mail($to, $subject, $message, $headers)) {
-                    $success = 'Pendaftaran berhasil! Silakan cek email Anda untuk verifikasi akun.';
+                    $success = 'Instruksi reset password telah dikirim ke email Anda. Silakan cek inbox atau folder spam.';
                 } else {
-                    $error = 'Gagal mengirim email verifikasi. Silakan coba lagi nanti.';
+                    $error = 'Gagal mengirim email reset password. Silakan coba lagi nanti.';
                 }
             } else {
-                $error = 'Terjadi kesalahan saat mendaftar: ' . $conn->error;
+                $error = 'Terjadi kesalahan saat memproses permintaan: ' . $conn->error;
             }
         }
     }
@@ -135,7 +181,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Register - Cupid</title>
+    <title>Lupa Password - Cupid</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
     <style>
         :root {
@@ -160,7 +206,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 40px 0;
         }
         
         .container {
@@ -215,11 +260,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             text-align: center;
         }
         
-        .error-message a {
-            color: #721c24;
-            font-weight: bold;
-        }
-        
         .success-message {
             background-color: #d4edda;
             color: #155724;
@@ -260,12 +300,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             margin-top: 5px;
         }
         
-        .btn {
+                .btn {
             display: block;
             width: 100%;
             padding: 12px;
             background-color: var(--primary);
-            color: var(--light);
+            color: var(--light) !important;
             border: none;
             border-radius: 5px;
             cursor: pointer;
@@ -273,7 +313,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             font-size: 16px;
             transition: background-color 0.3s;
         }
-        
         .btn:hover {
             background-color: #e63e5c;
         }
@@ -293,7 +332,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             text-decoration: underline;
         }
         
-        .requirements {
+        .description {
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #666;
+            line-height: 1.6;
+            text-align: center;
+        }
+        
+        .password-requirements {
             background-color: #f8f9fa;
             padding: 15px;
             border-radius: 5px;
@@ -301,17 +348,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             font-size: 14px;
         }
         
-        .requirements h3 {
+        .password-requirements h3 {
             font-size: 16px;
             margin-bottom: 10px;
             color: var(--dark);
         }
         
-        .requirements ul {
+        .password-requirements ul {
             padding-left: 20px;
         }
         
-        .requirements li {
+        .password-requirements li {
             margin-bottom: 5px;
         }
     </style>
@@ -326,7 +373,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         <div class="card">
             <div class="card-header">
-                <h1>Daftar</h1>
+                <h1><?php echo $show_reset_form ? 'Reset Password' : 'Lupa Password'; ?></h1>
             </div>
             
             <?php if (!empty($error)): ?>
@@ -339,38 +386,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="success-message">
                 <?php echo $success; ?>
             </div>
-            <div class="extra-links" style="margin-bottom: 20px;">
-                <p>Silakan <a href="login.php">login</a> setelah memverifikasi email Anda.</p>
-            </div>
-            <?php else: ?>
             
-            <div class="requirements">
-                <h3>Persyaratan Pendaftaran:</h3>
+            <div class="extra-links" style="margin-top: 30px;">
+                <a href="login.php" class="btn">Kembali ke Login</a>
+            </div>
+            
+            <?php elseif ($show_reset_form): ?>
+            <!-- Form Reset Password -->
+            <div class="description">
+                Silakan masukkan password baru untuk akun Anda.
+            </div>
+            
+            <div class="password-requirements">
+                <h3>Persyaratan Password:</h3>
                 <ul>
-                    <li>Email dengan domain <strong>student.president.ac.id</strong></li>
-                    <li>Password minimal 6 karakter</li>
-                    <li>Verifikasi email diperlukan untuk aktivasi akun</li>
+                    <li>Minimal 6 karakter</li>
+                    <li>Sebaiknya kombinasi huruf dan angka</li>
                 </ul>
             </div>
             
-            <form method="post" action="register.php">
-                <div class="form-group">
-                    <label for="name">Nama Lengkap</label>
-                    <input type="text" id="name" name="name" value="<?php echo htmlspecialchars($name); ?>" required>
-                </div>
+            <form method="post" action="forgot_password.php">
+                <input type="hidden" name="token" value="<?php echo htmlspecialchars($token); ?>">
                 
                 <div class="form-group">
-                    <label for="email">Email</label>
-                    <input type="email" id="email" name="email" 
-                           placeholder="nama@student.president.ac.id" 
-                           value="<?php echo htmlspecialchars($email); ?>" required>
-                    <div class="form-hint">Gunakan email dengan domain student.president.ac.id</div>
-                </div>
-                
-                <div class="form-group">
-                    <label for="password">Password</label>
+                    <label for="password">Password Baru</label>
                     <input type="password" id="password" name="password" required>
-                    <div class="form-hint">Minimal 6 karakter</div>
                 </div>
                 
                 <div class="form-group">
@@ -378,10 +418,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <input type="password" id="confirm_password" name="confirm_password" required>
                 </div>
                 
-                <button type="submit" class="btn">Daftar</button>
+                <button type="submit" name="reset_password" class="btn">Reset Password</button>
                 
                 <div class="extra-links">
-                    <p>Sudah punya akun? <a href="login.php">Masuk</a></p>
+                    <p>Ingat password? <a href="login.php">Login</a></p>
+                </div>
+            </form>
+            
+            <?php else: ?>
+            <!-- Form Permintaan Reset Password -->
+            <div class="description">
+                Masukkan email yang Anda gunakan saat mendaftar untuk menerima link reset password.
+            </div>
+            
+            <form method="post" action="forgot_password.php">
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email" value="<?php echo htmlspecialchars($email); ?>" placeholder="email@student.president.ac.id" required>
+                    <div class="form-hint">Email dengan domain student.president.ac.id</div>
+                </div>
+                
+                <button type="submit" name="request_reset" class="btn">Kirim Link Reset</button>
+                
+                <div class="extra-links">
+                    <p>Ingat password? <a href="login.php">Login</a></p>
+                    <p>Belum punya akun? <a href="register.php">Daftar</a></p>
                 </div>
             </form>
             <?php endif; ?>
@@ -391,29 +452,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <script>
         // Form validation
         document.querySelector('form').addEventListener('submit', function(e) {
-            const email = document.getElementById('email').value;
-            const password = document.getElementById('password').value;
-            const confirmPassword = document.getElementById('confirm_password').value;
-            
-            // Validate email domain
-            if (!email.endsWith('@student.president.ac.id')) {
-                e.preventDefault();
-                alert('Hanya email dengan domain student.president.ac.id yang diperbolehkan.');
-                return;
+            // Jika form reset password
+            if (document.querySelector('input[name="reset_password"]')) {
+                const password = document.getElementById('password').value;
+                const confirmPassword = document.getElementById('confirm_password').value;
+                
+                // Validate password length
+                if (password.length < 6) {
+                    e.preventDefault();
+                    alert('Password harus minimal 6 karakter.');
+                    return;
+                }
+                
+                // Validate password match
+                if (password !== confirmPassword) {
+                    e.preventDefault();
+                    alert('Password konfirmasi tidak cocok.');
+                    return;
+                }
             }
             
-            // Validate password length
-            if (password.length < 6) {
-                e.preventDefault();
-                alert('Password harus minimal 6 karakter.');
-                return;
-            }
-            
-            // Validate password match
-            if (password !== confirmPassword) {
-                e.preventDefault();
-                alert('Password konfirmasi tidak cocok.');
-                return;
+            // Jika form request reset
+            if (document.querySelector('input[name="request_reset"]')) {
+                const email = document.getElementById('email').value;
+                
+                // Validate email domain
+                if (!email.endsWith('@student.president.ac.id')) {
+                    e.preventDefault();
+                    alert('Hanya email dengan domain student.president.ac.id yang diperbolehkan.');
+                    return;
+                }
             }
         });
     </script>

@@ -1,10 +1,15 @@
 <?php
+// Aktifkan error reporting untuk debugging
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 // Start session
 session_start();
 
 // Check if user is logged in
 if (!isset($_SESSION['user_id'])) {
-    header('Location: index.php');
+    header('Location: login.php');
     exit();
 }
 
@@ -39,6 +44,17 @@ $profile_stmt->execute();
 $profile_result = $profile_stmt->get_result();
 $profile = $profile_result->fetch_assoc();
 
+// Tambahkan kemampuan untuk reset tes
+$reset_test = false;
+if (isset($_GET['reset']) && $_GET['reset'] == 'true') {
+    // Hapus hasil tes sebelumnya jika ada
+    $delete_sql = "DELETE FROM compatibility_results WHERE user_id = ?";
+    $delete_stmt = $conn->prepare($delete_sql);
+    $delete_stmt->bind_param("i", $user_id);
+    $delete_stmt->execute();
+    $reset_test = true;
+}
+
 // Check if compatibility test already taken
 $test_taken_sql = "SELECT * FROM compatibility_results WHERE user_id = ?";
 $test_taken_stmt = $conn->prepare($test_taken_sql);
@@ -48,12 +64,27 @@ $test_taken_result = $test_taken_stmt->get_result();
 $test_taken = ($test_taken_result->num_rows > 0);
 $test_results = $test_taken ? $test_taken_result->fetch_assoc() : null;
 
-// Get compatibility questions
+// Periksa apakah tabel compatibility_questions ada dan memiliki data
+$table_check = $conn->query("SHOW TABLES LIKE 'compatibility_questions'");
+if ($table_check->num_rows == 0) {
+    die("Tabel compatibility_questions tidak ditemukan. Silakan buat tabel terlebih dahulu.");
+}
+
+// Get compatibility questions dengan error handling
+$questions = [];
 $questions_sql = "SELECT * FROM compatibility_questions";
 $questions_result = $conn->query($questions_sql);
-$questions = [];
-while ($row = $questions_result->fetch_assoc()) {
-    $questions[] = $row;
+if ($questions_result) {
+    while ($row = $questions_result->fetch_assoc()) {
+        $questions[] = $row;
+    }
+}
+
+// Jika tidak ada pertanyaan di database, tambahkan pesan
+if (empty($questions)) {
+    echo "<div style='text-align:center; padding: 20px; background-color: #f8d7da; color: #721c24; margin: 20px;'>
+            <p>Tidak ada pertanyaan kompatibilitas yang ditemukan di database. Admin perlu menambahkan pertanyaan.</p>
+          </div>";
 }
 
 // Handle test submission
@@ -62,95 +93,107 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_test'])) {
     $answers = [];
     $personality_score = 0;
     
-    foreach ($questions as $question) {
-        $q_id = $question['id'];
-        if (isset($_POST['q_'.$q_id])) {
-            $answer = $_POST['q_'.$q_id];
-            $answers[$q_id] = $answer;
-            
-            // Calculate personality score based on answers
-            $personality_score += intval($answer);
+    // Pastikan ada pertanyaan sebelum memproses
+    if (!empty($questions)) {
+        foreach ($questions as $question) {
+            $q_id = $question['id'];
+            if (isset($_POST['q_'.$q_id])) {
+                $answer = $_POST['q_'.$q_id];
+                $answers[$q_id] = $answer;
+                
+                // Calculate personality score based on answers
+                $personality_score += intval($answer);
+            }
         }
-    }
-    
-    // Normalize personality score to a 0-100 scale
-    $max_possible = count($questions) * 5; // assuming 5 is max score per question
-    $personality_score = ($personality_score / $max_possible) * 100;
-    
-    // Get major and interests from profile
-    $major = $profile['major'] ?? '';
-    $interests = $profile['interests'] ?? '';
-    
-    // Check if already taken test
-    if ($test_taken) {
-        // Update test
-        $update_sql = "UPDATE compatibility_results SET 
-                      personality_score = ?, 
-                      major = ?, 
-                      interests = ?, 
-                      answers = ?
-                      WHERE user_id = ?";
-        $update_stmt = $conn->prepare($update_sql);
-        $answers_json = json_encode($answers);
-        $update_stmt->bind_param("dsssi", $personality_score, $major, $interests, $answers_json, $user_id);
         
-        if ($update_stmt->execute()) {
-            $message = '<div class="alert alert-success">Compatibility test updated! Finding new matches...</div>';
+        // Normalize personality score to a 0-100 scale
+        $max_possible = count($questions) * 5; // assuming 5 is max score per question
+        $personality_score = ($personality_score / $max_possible) * 100;
+        
+        // Get major and interests from profile
+        $major = $profile['major'] ?? '';
+        $interests = $profile['interests'] ?? '';
+        
+        // Check if already taken test
+        if ($test_taken) {
+            // Update test
+            $update_sql = "UPDATE compatibility_results SET 
+                          personality_score = ?, 
+                          major = ?, 
+                          interests = ?, 
+                          answers = ?
+                          WHERE user_id = ?";
+            $update_stmt = $conn->prepare($update_sql);
+            $answers_json = json_encode($answers);
+            $update_stmt->bind_param("dsssi", $personality_score, $major, $interests, $answers_json, $user_id);
+            
+            if ($update_stmt->execute()) {
+                $message = '<div class="alert alert-success">Compatibility test updated! Finding new matches...</div>';
+                // Refresh test results
+                $test_taken_stmt->execute();
+                $test_taken_result = $test_taken_stmt->get_result();
+                $test_results = $test_taken_result->fetch_assoc();
+            } else {
+                $message = '<div class="alert alert-danger">Error updating test results: ' . $conn->error . '</div>';
+            }
         } else {
-            $message = '<div class="alert alert-danger">Error updating test results: ' . $conn->error . '</div>';
+            // Save new test
+            $insert_sql = "INSERT INTO compatibility_results (user_id, personality_score, major, interests, answers) 
+                          VALUES (?, ?, ?, ?, ?)";
+            $insert_stmt = $conn->prepare($insert_sql);
+            $answers_json = json_encode($answers);
+            $insert_stmt->bind_param("idsss", $user_id, $personality_score, $major, $interests, $answers_json);
+            
+            if ($insert_stmt->execute()) {
+                $message = '<div class="alert alert-success">Compatibility test completed! Finding matches...</div>';
+                $test_taken = true;
+                // Refresh test results
+                $test_taken_stmt->execute();
+                $test_taken_result = $test_taken_stmt->get_result();
+                $test_results = $test_taken_result->fetch_assoc();
+            } else {
+                $message = '<div class="alert alert-danger">Error saving test results: ' . $conn->error . '</div>';
+            }
         }
     } else {
-        // Save new test
-        $insert_sql = "INSERT INTO compatibility_results (user_id, personality_score, major, interests, answers) 
-                      VALUES (?, ?, ?, ?, ?)";
-        $insert_stmt = $conn->prepare($insert_sql);
-        $answers_json = json_encode($answers);
-        $insert_stmt->bind_param("idsss", $user_id, $personality_score, $major, $interests, $answers_json);
-        
-        if ($insert_stmt->execute()) {
-            $message = '<div class="alert alert-success">Compatibility test completed! Finding matches...</div>';
-        } else {
-            $message = '<div class="alert alert-danger">Error saving test results: ' . $conn->error . '</div>';
-        }
+        $message = '<div class="alert alert-danger">Tidak dapat mengambil tes: Tidak ada pertanyaan yang tersedia.</div>';
     }
-    
-    // Refresh test data
-    $test_taken_stmt->execute();
-    $test_taken_result = $test_taken_stmt->get_result();
-    $test_taken = true;
-    $test_results = $test_taken_result->fetch_assoc();
 }
 
 // Get compatible matches if test taken
 $compatible_matches = [];
 if ($test_taken) {
-    $matches_sql = "SELECT u.id, u.name, p.profile_pic, p.bio, p.major, p.interests,
-                   ABS(cr.personality_score - ?) as personality_diff,
-                   CASE WHEN cr.major = ? THEN 30 ELSE 0 END as major_match,
-                   CASE WHEN cr.interests LIKE CONCAT('%', ?, '%') THEN 40 ELSE 0 END as interests_match,
-                   (100 - ABS(cr.personality_score - ?) * 0.3 + 
-                   CASE WHEN cr.major = ? THEN 30 ELSE 0 END + 
-                   CASE WHEN cr.interests LIKE CONCAT('%', ?, '%') THEN 40 ELSE 0 END) as compatibility_score
-                   FROM compatibility_results cr
-                   JOIN users u ON cr.user_id = u.id
-                   JOIN profiles p ON u.id = p.user_id
-                   WHERE cr.user_id != ?
-                   ORDER BY compatibility_score DESC
-                   LIMIT 15";
-    $matches_stmt = $conn->prepare($matches_sql);
-    
-    // Get user's test data
-    $personality_score = $test_results['personality_score'];
-    $user_major = $test_results['major'];
-    $user_interests = $test_results['interests'];
-    
- $matches_stmt->bind_param("dsdsssi", $personality_score, $user_major, $user_interests, 
-                         $personality_score, $user_major, $user_interests, $user_id);
-    $matches_stmt->execute();
-    $matches_result = $matches_stmt->get_result();
-    
-    while ($row = $matches_result->fetch_assoc()) {
-        $compatible_matches[] = $row;
+    try {
+        $matches_sql = "SELECT u.id, u.name, p.profile_pic, p.bio, p.major, p.interests,
+                       ABS(cr.personality_score - ?) as personality_diff,
+                       CASE WHEN cr.major = ? THEN 30 ELSE 0 END as major_match,
+                       CASE WHEN IFNULL(cr.interests, '') LIKE CONCAT('%', IFNULL(?, ''), '%') THEN 40 ELSE 0 END as interests_match,
+                       (100 - ABS(cr.personality_score - ?) * 0.3 + 
+                       CASE WHEN cr.major = ? THEN 30 ELSE 0 END + 
+                       CASE WHEN IFNULL(cr.interests, '') LIKE CONCAT('%', IFNULL(?, ''), '%') THEN 40 ELSE 0 END) as compatibility_score
+                       FROM compatibility_results cr
+                       JOIN users u ON cr.user_id = u.id
+                       LEFT JOIN profiles p ON u.id = p.user_id
+                       WHERE cr.user_id != ?
+                       ORDER BY compatibility_score DESC
+                       LIMIT 15";
+        $matches_stmt = $conn->prepare($matches_sql);
+        
+        // Get user's test data
+        $personality_score = $test_results['personality_score'];
+        $user_major = $test_results['major'] ?? '';
+        $user_interests = $test_results['interests'] ?? '';
+        
+        $matches_stmt->bind_param("dsdsssi", $personality_score, $user_major, $user_interests, 
+                               $personality_score, $user_major, $user_interests, $user_id);
+        $matches_stmt->execute();
+        $matches_result = $matches_stmt->get_result();
+        
+        while ($row = $matches_result->fetch_assoc()) {
+            $compatible_matches[] = $row;
+        }
+    } catch (Exception $e) {
+        echo '<div class="alert alert-danger">Error: ' . $e->getMessage() . '</div>';
     }
 }
 ?>
@@ -540,12 +583,17 @@ if ($test_taken) {
             
             <?php echo $message; ?>
             
-            <?php if (!$test_taken): ?>
+            <?php if ($reset_test || !$test_taken): ?>
             <div class="card">
                 <div class="card-header">
                     <h2>Tes Kecocokan</h2>
                 </div>
                 <p>Jawab pertanyaan berikut dengan jujur untuk mendapatkan hasil yang paling akurat.</p>
+                <?php if (empty($questions)): ?>
+                    <div class="alert alert-danger">
+                        Tidak ada pertanyaan kompatibilitas yang tersedia. Silakan hubungi admin.
+                    </div>
+                <?php else: ?>
                 <form id="compatibility-form" method="post">
                     <?php foreach ($questions as $index => $question): ?>
                     <div class="question">
@@ -563,6 +611,7 @@ if ($test_taken) {
                     
                     <button type="submit" name="submit_test" class="btn">Lihat Hasil</button>
                 </form>
+                <?php endif; ?>
             </div>
             <?php else: ?>
             <div class="card">
@@ -577,7 +626,7 @@ if ($test_taken) {
                         <div class="score-label">Skor Kepribadian</div>
                     </div>
                     <div class="score-item">
-                        <div class="score-value"><?php echo $test_results['major']; ?></div>
+                        <div class="score-value"><?php echo !empty($test_results['major']) ? htmlspecialchars($test_results['major']) : 'Tidak ada'; ?></div>
                         <div class="score-label">Jurusan</div>
                     </div>
                     <div class="score-item">
@@ -588,32 +637,7 @@ if ($test_taken) {
                 
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
                     <h3>Pasangan Yang Cocok</h3>
-                    <a href="#" onclick="document.getElementById('compatibility-form-container').style.display = 'block';" class="btn btn-outline">Ambil Tes Lagi</a>
-                </div>
-                
-                <div id="compatibility-form-container" style="display: none;">
-                    <form id="compatibility-form" method="post">
-                        <?php foreach ($questions as $index => $question): ?>
-                        <div class="question">
-                            <h3><?php echo ($index + 1) . '. ' . htmlspecialchars($question['question_text']); ?></h3>
-                            <div class="options">
-                                <?php 
-                                $user_answers = json_decode($test_results['answers'], true);
-                                $user_answer = isset($user_answers[$question['id']]) ? $user_answers[$question['id']] : null;
-                                
-                                for ($i = 1; $i <= 5; $i++): 
-                                ?>
-                                <label class="option <?php echo $user_answer == $i ? 'selected' : ''; ?>">
-                                    <input type="radio" name="q_<?php echo $question['id']; ?>" value="<?php echo $i; ?>" <?php echo $user_answer == $i ? 'checked' : ''; ?> required>
-                                    <?php echo htmlspecialchars($question['option_' . $i]); ?>
-                                </label>
-                                <?php endfor; ?>
-                            </div>
-                        </div>
-                        <?php endforeach; ?>
-                        
-                        <button type="submit" name="submit_test" class="btn">Perbarui Hasil</button>
-                    </form>
+                    <a href="compatibility.php?reset=true" class="btn btn-outline">Ambil Tes Ulang</a>
                 </div>
                 
                 <?php if (empty($compatible_matches)): ?>
@@ -635,7 +659,7 @@ if ($test_taken) {
                                 <span class="match-score"><?php echo round($match['compatibility_score']); ?>%</span>
                             </div>
                             <div class="match-details">
-                                <?php echo htmlspecialchars($match['major']); ?>
+                                <?php echo !empty($match['major']) ? htmlspecialchars($match['major']) : 'Jurusan tidak diketahui'; ?>
                             </div>
                             
                             <?php if (!empty($match['interests'])): ?>
@@ -654,7 +678,7 @@ if ($test_taken) {
                             <?php endif; ?>
                             
                             <div class="match-bio">
-                                <?php echo nl2br(htmlspecialchars($match['bio'])); ?>
+                                <?php echo !empty($match['bio']) ? nl2br(htmlspecialchars($match['bio'])) : 'Belum ada bio.'; ?>
                             </div>
                             
                             <div class="match-actions">
@@ -666,6 +690,12 @@ if ($test_taken) {
                     <?php endforeach; ?>
                 </div>
                 <?php endif; ?>
+                
+                <!-- Tombol Reset Tes -->
+                <div style="margin-top: 30px; text-align: center;">
+                    <a href="compatibility.php?reset=true" class="btn" style="background-color: #dc3545; color: white;">Reset Tes & Mulai Ulang</a>
+                </div>
+                
             </div>
             <?php endif; ?>
         </div>

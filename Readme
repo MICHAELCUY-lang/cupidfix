@@ -8,6 +8,11 @@
 4. cupid.php adalah landing page pada web cupid
 5. kalau tidak mengerti code tanyakan pada MICHAEL T_T. satu titik dua koma, kurang titik error semua
 
+HARUS SEGERA DI FIX
+1. user yang belum punya akun tidak bisa masuk dan harus ke direct di register.php. 
+2. perbaiki tombol daftar dan login agar user yang belum punya akun tidak bisa liat dashboard.
+
+
 TO-DO-LIST
 1. membuat tampilan login dan daftar langsung di index (tidak perlu lagi login.php dan register.php)
 2. membuat tampilan admin
