@@ -1376,31 +1376,57 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
             $user_major = isset($test_results['major']) ? $test_results['major'] : '';
             $user_interests = isset($test_results['interests']) ? $test_results['interests'] : '';
             
-            // Perubahan yang dibutuhkan di bagian compatibility
-$matches_sql = "SELECT u.id, u.name, p.profile_pic, p.bio, p.major, p.interests,
-               ABS(IFNULL(cr.personality_score, 0) - ?) as personality_diff,
-               CASE WHEN cr.major = ? THEN 30 ELSE 0 END as major_match,
-               CASE WHEN INSTR(LOWER(IFNULL(cr.interests, '')), LOWER(IFNULL(?, ''))) > 0 THEN 40 ELSE 0 END as interests_match,
-               (100 - ABS(IFNULL(cr.personality_score, 0) - ?) * 0.3 + 
-               CASE WHEN cr.major = ? THEN 30 ELSE 0 END + 
-               CASE WHEN INSTR(LOWER(IFNULL(cr.interests, '')), LOWER(IFNULL(?, ''))) > 0 THEN 40 ELSE 0 END) as compatibility_score
-               FROM compatibility_results cr
-               JOIN users u ON cr.user_id = u.id
-               LEFT JOIN profiles p ON u.id = p.user_id
-               WHERE cr.user_id != ?
-               ORDER BY compatibility_score DESC
-               LIMIT 15";
+            // Using a simpler query without string comparison for interests
+            $matches_sql = "SELECT u.id, u.name, p.profile_pic, p.bio, p.major, p.interests,
+                           ABS(IFNULL(cr.personality_score, 0) - ?) as personality_diff,
+                           CASE WHEN cr.major = ? THEN 30 ELSE 0 END as major_match,
+                           (100 - ABS(IFNULL(cr.personality_score, 0) - ?) * 0.3 + 
+                           CASE WHEN cr.major = ? THEN 30 ELSE 0 END) as compatibility_score
+                           FROM compatibility_results cr
+                           JOIN users u ON cr.user_id = u.id
+                           LEFT JOIN profiles p ON u.id = p.user_id
+                           WHERE cr.user_id != ?
+                           ORDER BY compatibility_score DESC
+                           LIMIT 15";
+            
             $matches_stmt = $conn->prepare($matches_sql);
             if ($matches_stmt) {
-                $matches_stmt->bind_param("dsdsssi", $personality_score, $user_major, $user_interests, 
-                                        $personality_score, $user_major, $user_interests, $user_id);
+                $matches_stmt->bind_param("dsdsi", 
+                    $personality_score, 
+                    $user_major, 
+                    $personality_score, 
+                    $user_major, 
+                    $user_id
+                );
+                
                 $matches_stmt->execute();
                 $matches_result = $matches_stmt->get_result();
                 
                 if ($matches_result) {
                     while ($row = $matches_result->fetch_assoc()) {
+                        // Manually calculate interest match score
+                        $interest_match_score = 0;
+                        if (!empty($row['interests']) && !empty($user_interests)) {
+                            $user_interest_array = array_map('trim', explode(',', strtolower($user_interests)));
+                            $match_interest_array = array_map('trim', explode(',', strtolower($row['interests'])));
+                            
+                            $common_interests = array_intersect($user_interest_array, $match_interest_array);
+                            if (count($common_interests) > 0) {
+                                $interest_match_score = 40;
+                            }
+                        }
+                        
+                        // Adjust compatibility score with interest match
+                        $row['interests_match'] = $interest_match_score;
+                        $row['compatibility_score'] = $row['compatibility_score'] + $interest_match_score;
+                        
                         $compatible_matches[] = $row;
                     }
+                    
+                    // Sort matches by compatibility score
+                    usort($compatible_matches, function($a, $b) {
+                        return $b['compatibility_score'] <=> $a['compatibility_score'];
+                    });
                 }
             }
         } catch (Exception $e) {
