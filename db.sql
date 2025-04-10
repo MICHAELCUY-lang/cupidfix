@@ -155,6 +155,8 @@ ALTER TABLE users
 ADD COLUMN reset_token VARCHAR(64) NULL,
 ADD COLUMN reset_token_expiry DATETIME NULL;
 
+ALTER TABLE compatibility_results MODIFY interests VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
 -- Script untuk Login dan Register
 
 -- login.php

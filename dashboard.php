@@ -327,7 +327,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_test'])) {
         $test_taken = true;
         
         // Find compatible matches
-        header("Location: compatibility.php");
+        header("Location: dashboard.php");
         exit();
     } else {
         $test_message = 'Error saving test results: ' . $conn->error;
@@ -337,19 +337,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_test'])) {
 // Get compatible matches if test taken
 $compatible_matches = [];
 if ($test_taken) {
-    $matches_sql = "SELECT u.id, u.name, p.profile_pic, p.bio, 
-                    ABS(cr.personality_score - (SELECT personality_score FROM compatibility_results WHERE user_id = ?)) as personality_diff,
-                    CASE WHEN cr.major = (SELECT major FROM compatibility_results WHERE user_id = ?) THEN 30 ELSE 0 END as major_match,
-                    CASE WHEN cr.interests LIKE CONCAT('%', (SELECT interests FROM compatibility_results WHERE user_id = ?), '%') THEN 40 ELSE 0 END as interests_match,
-                    (100 - ABS(cr.personality_score - (SELECT personality_score FROM compatibility_results WHERE user_id = ?)) * 0.3 + 
-                    CASE WHEN cr.major = (SELECT major FROM compatibility_results WHERE user_id = ?) THEN 30 ELSE 0 END + 
-                    CASE WHEN cr.interests LIKE CONCAT('%', (SELECT interests FROM compatibility_results WHERE user_id = ?), '%') THEN 40 ELSE 0 END) as compatibility_score
-                    FROM compatibility_results cr
-                    JOIN users u ON cr.user_id = u.id
-                    JOIN profiles p ON u.id = p.user_id
-                    WHERE cr.user_id != ?
-                    ORDER BY compatibility_score DESC
-                    LIMIT 10";
+    $matches_sql = "SELECT u.id, u.name, p.profile_pic, p.bio, p.major, p.interests,
+               ABS(IFNULL(cr.personality_score, 0) - ?) as personality_diff,
+               CASE WHEN cr.major = ? THEN 30 ELSE 0 END as major_match,
+               CASE WHEN INSTR(LOWER(IFNULL(cr.interests, '')), LOWER(IFNULL(?, ''))) > 0 THEN 40 ELSE 0 END as interests_match,
+               (100 - ABS(IFNULL(cr.personality_score, 0) - ?) * 0.3 + 
+               CASE WHEN cr.major = ? THEN 30 ELSE 0 END + 
+               CASE WHEN INSTR(LOWER(IFNULL(cr.interests, '')), LOWER(IFNULL(?, ''))) > 0 THEN 40 ELSE 0 END) as compatibility_score
+               FROM compatibility_results cr
+               JOIN users u ON cr.user_id = u.id
+               LEFT JOIN profiles p ON u.id = p.user_id
+               WHERE cr.user_id != ?
+               ORDER BY compatibility_score DESC
+               LIMIT 15";
     $matches_stmt = $conn->prepare($matches_sql);
     $matches_stmt->bind_param("iiiiiii", $user_id, $user_id, $user_id, $user_id, $user_id, $user_id, $user_id);
     $matches_stmt->execute();
@@ -1195,7 +1195,7 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                                                 if (isset($session['last_message_time']) && !empty($session['last_message_time'])) {
                                                     echo date('d M', strtotime($session['last_message_time']));
                                                 } else {
-                                                    echo 'Baru';  // atau 'Belum chat', atau tampilkan ikon
+                                                     echo 'Baru';  // atau 'Belum chat', atau tampilkan ikon
                                                 }
                                                 echo '</div>'; ?>
                                             </div>
@@ -1204,50 +1204,71 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                                 <?php endif; ?>
                             </div>
                         </div>
-                    
-                    <?php elseif ($page === 'compatibility'): ?>
+
+<?php elseif ($page === 'compatibility'): ?>
     <div class="dashboard-header">
         <h2>Tes Kecocokan</h2>
         <p>Ikuti tes untuk menemukan pasangan yang cocok berdasarkan kepribadian, jurusan, dan minat.</p>
     </div>
     
     <?php
-    // Aktifkan error reporting untuk debugging
-    error_reporting(E_ALL & ~E_DEPRECATED); 
+    // Aktifkan error reporting untuk debugging tapi nonaktifkan deprecated warnings
+    error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE); 
     ini_set('display_errors', 0);
     
     // Tambahkan kemampuan untuk reset tes
     $reset_test = false;
     if (isset($_GET['reset']) && $_GET['reset'] == 'true') {
-        // Hapus hasil tes sebelumnya jika ada
-        $delete_sql = "DELETE FROM compatibility_results WHERE user_id = ?";
-        $delete_stmt = $conn->prepare($delete_sql);
-        $delete_stmt->bind_param("i", $user_id);
-        $delete_stmt->execute();
-        $reset_test = true;
-        
-        // Refresh the current page without the reset parameter
-        echo '<script>window.location.href = "dashboard.php?page=compatibility";</script>';
-        exit;
+        try {
+            // Hapus hasil tes sebelumnya jika ada
+            $delete_sql = "DELETE FROM compatibility_results WHERE user_id = ?";
+            $delete_stmt = $conn->prepare($delete_sql);
+            if ($delete_stmt) {
+                $delete_stmt->bind_param("i", $user_id);
+                $delete_stmt->execute();
+                $reset_test = true;
+                
+                // Gunakan header PHP untuk redirect yang lebih aman
+                header("Location: dashboard.php?page=compatibility");
+                exit;
+            }
+        } catch (Exception $e) {
+            error_log("Error deleting compatibility results: " . $e->getMessage());
+            // Lanjutkan eksekusi halaman tanpa menghentikan proses
+        }
     }
 
     // Check if compatibility test already taken
-    $test_taken_sql = "SELECT * FROM compatibility_results WHERE user_id = ?";
-    $test_taken_stmt = $conn->prepare($test_taken_sql);
-    $test_taken_stmt->bind_param("i", $user_id);
-    $test_taken_stmt->execute();
-    $test_taken_result = $test_taken_stmt->get_result();
-    $test_taken = ($test_taken_result->num_rows > 0);
-    $test_results = $test_taken ? $test_taken_result->fetch_assoc() : null;
+    $test_taken = false;
+    $test_results = null;
+    try {
+        $test_taken_sql = "SELECT * FROM compatibility_results WHERE user_id = ?";
+        $test_taken_stmt = $conn->prepare($test_taken_sql);
+        if ($test_taken_stmt) {
+            $test_taken_stmt->bind_param("i", $user_id);
+            $test_taken_stmt->execute();
+            $test_taken_result = $test_taken_stmt->get_result();
+            $test_taken = ($test_taken_result && $test_taken_result->num_rows > 0);
+            if ($test_taken) {
+                $test_results = $test_taken_result->fetch_assoc();
+            }
+        }
+    } catch (Exception $e) {
+        error_log("Error checking compatibility test status: " . $e->getMessage());
+    }
 
     // Get compatibility questions dengan error handling
     $questions = [];
-    $questions_sql = "SELECT * FROM compatibility_questions";
-    $questions_result = $conn->query($questions_sql);
-    if ($questions_result && $questions_result->num_rows > 0) {
-        while ($row = $questions_result->fetch_assoc()) {
-            $questions[] = $row;
+    try {
+        $questions_sql = "SELECT * FROM compatibility_questions";
+        $questions_result = $conn->query($questions_sql);
+        if ($questions_result && $questions_result->num_rows > 0) {
+            while ($row = $questions_result->fetch_assoc()) {
+                $questions[] = $row;
+            }
         }
+    } catch (Exception $e) {
+        error_log("Error fetching compatibility questions: " . $e->getMessage());
     }
 
     // Handle test submission
@@ -1256,72 +1277,93 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
         if (empty($questions)) {
             $test_message = '<div class="alert alert-danger">Tidak dapat mengambil tes: Tidak ada pertanyaan yang tersedia.</div>';
         } else {
-            $answers = [];
-            $personality_score = 0;
-            
-            foreach ($questions as $question) {
-                $q_id = $question['id'];
-                if (isset($_POST['q_'.$q_id])) {
-                    $answer = $_POST['q_'.$q_id];
-                    $answers[$q_id] = $answer;
-                    
-                    // Calculate personality score based on answers
-                    $personality_score += intval($answer);
-                }
-            }
-            
-            // Normalize personality score to a 0-100 scale
-            $max_possible = count($questions) * 5; // assuming 5 is max score per question
-            if ($max_possible > 0) {
-                $personality_score = ($personality_score / $max_possible) * 100;
-            } else {
+            try {
+                $answers = [];
                 $personality_score = 0;
-            }
-            
-            // Get major and interests from profile
-            $major = isset($profile['major']) ? $profile['major'] : '';
-            $interests = isset($profile['interests']) ? $profile['interests'] : '';
-            
-            if ($test_taken) {
-                // Update test
-                $update_sql = "UPDATE compatibility_results SET 
-                              personality_score = ?, 
-                              major = ?, 
-                              interests = ?, 
-                              answers = ?
-                              WHERE user_id = ?";
-                $update_stmt = $conn->prepare($update_sql);
-                $answers_json = json_encode($answers);
-                $update_stmt->bind_param("dsssi", $personality_score, $major, $interests, $answers_json, $user_id);
                 
-                if ($update_stmt->execute()) {
-                    $test_message = '<div class="alert alert-success">Compatibility test updated! Finding new matches...</div>';
-                    // Refresh test data
-                    $test_taken_stmt->execute();
-                    $test_taken_result = $test_taken_stmt->get_result();
-                    $test_results = $test_taken_result->fetch_assoc();
-                    $test_taken = true;
-                } else {
-                    $test_message = '<div class="alert alert-danger">Error updating test results: ' . $conn->error . '</div>';
+                foreach ($questions as $question) {
+                    $q_id = $question['id'];
+                    if (isset($_POST['q_'.$q_id])) {
+                        $answer = $_POST['q_'.$q_id];
+                        $answers[$q_id] = $answer;
+                        
+                        // Calculate personality score based on answers
+                        $personality_score += intval($answer);
+                    }
                 }
-            } else {
-                // Save new test
-                $insert_sql = "INSERT INTO compatibility_results (user_id, personality_score, major, interests, answers) 
-                              VALUES (?, ?, ?, ?, ?)";
-                $insert_stmt = $conn->prepare($insert_sql);
-                $answers_json = json_encode($answers);
-                $insert_stmt->bind_param("idsss", $user_id, $personality_score, $major, $interests, $answers_json);
                 
-                if ($insert_stmt->execute()) {
-                    $test_message = '<div class="alert alert-success">Compatibility test completed! Finding matches...</div>';
-                    $test_taken = true;
-                    // Refresh test data
-                    $test_taken_stmt->execute();
-                    $test_taken_result = $test_taken_stmt->get_result();
-                    $test_results = $test_taken_result->fetch_assoc();
+                // Normalize personality score to a 0-100 scale
+                $max_possible = count($questions) * 5; // assuming 5 is max score per question
+                if ($max_possible > 0) {
+                    $personality_score = ($personality_score / $max_possible) * 100;
                 } else {
-                    $test_message = '<div class="alert alert-danger">Error saving test results: ' . $conn->error . '</div>';
+                    $personality_score = 0;
                 }
+                
+                // Get major and interests from profile
+                $major = isset($profile['major']) ? $profile['major'] : '';
+                $interests = isset($profile['interests']) ? $profile['interests'] : '';
+                
+                if ($test_taken) {
+                    // Update test
+                    $update_sql = "UPDATE compatibility_results SET 
+                                  personality_score = ?, 
+                                  major = ?, 
+                                  interests = ?, 
+                                  answers = ?
+                                  WHERE user_id = ?";
+                    $update_stmt = $conn->prepare($update_sql);
+                    if ($update_stmt) {
+                        $answers_json = json_encode($answers);
+                        $update_stmt->bind_param("dsssi", $personality_score, $major, $interests, $answers_json, $user_id);
+                        
+                        if ($update_stmt->execute()) {
+                            $test_message = '<div class="alert alert-success">Compatibility test updated! Finding new matches...</div>';
+                            // Refresh test data
+                            if ($test_taken_stmt) {
+                                $test_taken_stmt->execute();
+                                $test_taken_result = $test_taken_stmt->get_result();
+                                if ($test_taken_result && $test_taken_result->num_rows > 0) {
+                                    $test_results = $test_taken_result->fetch_assoc();
+                                }
+                            }
+                            $test_taken = true;
+                        } else {
+                            $test_message = '<div class="alert alert-danger">Error updating test results: ' . $conn->error . '</div>';
+                        }
+                    } else {
+                        $test_message = '<div class="alert alert-danger">Error preparing update statement</div>';
+                    }
+                } else {
+                    // Save new test
+                    $insert_sql = "INSERT INTO compatibility_results (user_id, personality_score, major, interests, answers) 
+                                  VALUES (?, ?, ?, ?, ?)";
+                    $insert_stmt = $conn->prepare($insert_sql);
+                    if ($insert_stmt) {
+                        $answers_json = json_encode($answers);
+                        $insert_stmt->bind_param("idsss", $user_id, $personality_score, $major, $interests, $answers_json);
+                        
+                        if ($insert_stmt->execute()) {
+                            $test_message = '<div class="alert alert-success">Compatibility test completed! Finding matches...</div>';
+                            $test_taken = true;
+                            // Refresh test data
+                            if ($test_taken_stmt) {
+                                $test_taken_stmt->execute();
+                                $test_taken_result = $test_taken_stmt->get_result();
+                                if ($test_taken_result && $test_taken_result->num_rows > 0) {
+                                    $test_results = $test_taken_result->fetch_assoc();
+                                }
+                            }
+                        } else {
+                            $test_message = '<div class="alert alert-danger">Error saving test results: ' . $conn->error . '</div>';
+                        }
+                    } else {
+                        $test_message = '<div class="alert alert-danger">Error preparing insert statement</div>';
+                    }
+                }
+            } catch (Exception $e) {
+                $test_message = '<div class="alert alert-danger">Error processing test: ' . $e->getMessage() . '</div>';
+                error_log("Error processing compatibility test: " . $e->getMessage());
             }
         }
     }
@@ -1334,30 +1376,36 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
             $user_major = isset($test_results['major']) ? $test_results['major'] : '';
             $user_interests = isset($test_results['interests']) ? $test_results['interests'] : '';
             
-            $matches_sql = "SELECT u.id, u.name, p.profile_pic, p.bio, p.major, p.interests,
-                           ABS(IFNULL(cr.personality_score, 0) - ?) as personality_diff,
-                           CASE WHEN cr.major = ? THEN 30 ELSE 0 END as major_match,
-                           CASE WHEN IFNULL(cr.interests, '') LIKE CONCAT('%', IFNULL(?, ''), '%') THEN 40 ELSE 0 END as interests_match,
-                           (100 - ABS(IFNULL(cr.personality_score, 0) - ?) * 0.3 + 
-                           CASE WHEN cr.major = ? THEN 30 ELSE 0 END + 
-                           CASE WHEN IFNULL(cr.interests, '') LIKE CONCAT('%', IFNULL(?, ''), '%') THEN 40 ELSE 0 END) as compatibility_score
-                           FROM compatibility_results cr
-                           JOIN users u ON cr.user_id = u.id
-                           LEFT JOIN profiles p ON u.id = p.user_id
-                           WHERE cr.user_id != ?
-                           ORDER BY compatibility_score DESC
-                           LIMIT 15";
+            // Perubahan yang dibutuhkan di bagian compatibility
+$matches_sql = "SELECT u.id, u.name, p.profile_pic, p.bio, p.major, p.interests,
+               ABS(IFNULL(cr.personality_score, 0) - ?) as personality_diff,
+               CASE WHEN cr.major = ? THEN 30 ELSE 0 END as major_match,
+               CASE WHEN INSTR(LOWER(IFNULL(cr.interests, '')), LOWER(IFNULL(?, ''))) > 0 THEN 40 ELSE 0 END as interests_match,
+               (100 - ABS(IFNULL(cr.personality_score, 0) - ?) * 0.3 + 
+               CASE WHEN cr.major = ? THEN 30 ELSE 0 END + 
+               CASE WHEN INSTR(LOWER(IFNULL(cr.interests, '')), LOWER(IFNULL(?, ''))) > 0 THEN 40 ELSE 0 END) as compatibility_score
+               FROM compatibility_results cr
+               JOIN users u ON cr.user_id = u.id
+               LEFT JOIN profiles p ON u.id = p.user_id
+               WHERE cr.user_id != ?
+               ORDER BY compatibility_score DESC
+               LIMIT 15";
             $matches_stmt = $conn->prepare($matches_sql);
-            $matches_stmt->bind_param("dsdsssi", $personality_score, $user_major, $user_interests, 
-                                      $personality_score, $user_major, $user_interests, $user_id);
-            $matches_stmt->execute();
-            $matches_result = $matches_stmt->get_result();
-            
-            while ($row = $matches_result->fetch_assoc()) {
-                $compatible_matches[] = $row;
+            if ($matches_stmt) {
+                $matches_stmt->bind_param("dsdsssi", $personality_score, $user_major, $user_interests, 
+                                        $personality_score, $user_major, $user_interests, $user_id);
+                $matches_stmt->execute();
+                $matches_result = $matches_stmt->get_result();
+                
+                if ($matches_result) {
+                    while ($row = $matches_result->fetch_assoc()) {
+                        $compatible_matches[] = $row;
+                    }
+                }
             }
         } catch (Exception $e) {
             $test_message = '<div class="alert alert-danger">Error finding matches: ' . $e->getMessage() . '</div>';
+            error_log("Error finding compatibility matches: " . $e->getMessage());
         }
     }
     ?>
@@ -1481,21 +1529,25 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
     
     <script>
         // Make radio options more user-friendly
-        document.querySelectorAll('.option').forEach(option => {
-            option.addEventListener('click', function() {
-                const radio = this.querySelector('input[type="radio"]');
-                radio.checked = true;
-                
-                // Update visual selection
-                const questionDiv = this.closest('.question');
-                questionDiv.querySelectorAll('.option').forEach(op => {
-                    op.classList.remove('selected');
+        document.addEventListener('DOMContentLoaded', function() {
+            const options = document.querySelectorAll('.option');
+            if (options.length > 0) {
+                options.forEach(option => {
+                    option.addEventListener('click', function() {
+                        const radio = this.querySelector('input[type="radio"]');
+                        radio.checked = true;
+                        
+                        // Update visual selection
+                        const questionDiv = this.closest('.question');
+                        questionDiv.querySelectorAll('.option').forEach(op => {
+                            op.classList.remove('selected');
+                        });
+                        this.classList.add('selected');
+                    });
                 });
-                this.classList.add('selected');
-            });
+            }
         });
     </script>
-<?php endif; ?>
                     
                     <?php elseif ($page === 'matches'): ?>
                         <div class="dashboard-header">
