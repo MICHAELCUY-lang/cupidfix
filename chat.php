@@ -539,10 +539,10 @@ $update_seen_stmt->execute();
                 <div class="chat-avatar">
                     <?php if (!$is_blind || $both_approved): ?>
                     <a href="<?php echo (!$is_blind) ? 'view_profile.php?id=' . $partner_id : '#'; ?>" style="display: block; cursor: pointer;">
-                        <img src="<?php echo !empty($chat_session['profile_pic']) ? htmlspecialchars($chat_session['profile_pic']) : '/api/placeholder/50/50'; ?>" alt="<?php echo htmlspecialchars($chat_session['partner_name']); ?>">
+                        <img src="<?php echo !empty($chat_session['profile_pic']) ? htmlspecialchars($chat_session['profile_pic']) : '../assets/images/user_profile.png'; ?>" alt="<?php echo htmlspecialchars($chat_session['partner_name']); ?>">
                     </a>
                     <?php else: ?>
-                    <img src="/api/placeholder/50/50" alt="Anonymous User">
+                    <img src="../assets/images/user_profile.png" alt="Anonymous User">
                     <?php endif; ?>
                 </div>
                 <div class="chat-profile">

@@ -261,21 +261,14 @@ $chat_sessions_sql = "SELECT cs.*,
                       u2.name as user2_name,
                       CASE WHEN cs.user1_id = ? THEN u2.name ELSE u1.name END as partner_name,
                       CASE WHEN cs.user1_id = ? THEN u2.id ELSE u1.id END as partner_id,
-                      p.profile_pic,
-                      cs.is_blind,
-                      cs.is_approved,
-                      cs.user1_approved,
-                      cs.user2_approved,
-                      (SELECT message FROM chat_messages WHERE session_id = cs.id ORDER BY created_at DESC LIMIT 1) as last_message,
-                      (SELECT created_at FROM chat_messages WHERE session_id = cs.id ORDER BY created_at DESC LIMIT 1) as last_message_time
+                      (SELECT MAX(created_at) FROM chat_messages WHERE session_id = cs.id) as last_message_time
                       FROM chat_sessions cs
                       JOIN users u1 ON cs.user1_id = u1.id
                       JOIN users u2 ON cs.user2_id = u2.id
-                      LEFT JOIN profiles p ON (CASE WHEN cs.user1_id = ? THEN u2.id ELSE u1.id END) = p.user_id
                       WHERE cs.user1_id = ? OR cs.user2_id = ?
-                      ORDER BY CASE WHEN last_message_time IS NULL THEN 0 ELSE 1 END DESC, last_message_time DESC";
+                      ORDER BY last_message_time DESC";
 $chat_sessions_stmt = $conn->prepare($chat_sessions_sql);
-$chat_sessions_stmt->bind_param("iiiii", $user_id, $user_id, $user_id, $user_id, $user_id);
+$chat_sessions_stmt->bind_param("iiii", $user_id, $user_id, $user_id, $user_id);
 $chat_sessions_stmt->execute();
 $chat_sessions_result = $chat_sessions_stmt->get_result();
 $chat_sessions = [];
@@ -1381,219 +1374,64 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                             </div>
                         </div>
                     
-                    <?php if ($page === 'chat'): ?>
-    <div class="dashboard-header">
-        <h2>Chat</h2>
-        <p>Chat dengan pengguna lain dan temukan teman baru.</p>
-    </div>
-    
-    <div class="card">
-        <div class="card-header">
-            <h3>Chat Menu</h3>
-        </div>
-        
-        <div class="chat-tabs">
-            <div class="chat-tab active" data-tab="all">Semua Chat</div>
-            <div class="chat-tab" data-tab="blind">Anonymous Chat</div>
-            <div class="chat-tab" data-tab="regular">Chat Biasa</div>
-        </div>
-        
-        <div class="tab-content active" id="all-tab">
-            <?php
-            // Tambahkan tombol untuk memulai blind chat baru
-            ?>
-            <div class="blind-chat-action">
-                <form method="post">
-                    <button type="submit" name="start_blind_chat" class="btn">
-                        <i class="fas fa-mask"></i> Mulai Anonymous Chat
-                    </button>
-                </form>
-                <p class="help-text">Mulai chat dengan pengguna acak tanpa melihat profil mereka terlebih dahulu.</p>
-            </div>
-            
-            <div class="chat-session-list">
-                <h4>Daftar Chat Aktif</h4>
-                <?php if (empty($chat_sessions)): ?>
-                    <div class="empty-state">
-                        <p>Belum ada chat yang aktif. Mulai chat baru sekarang!</p>
-                    </div>
-                <?php else: ?>
-                    <?php foreach ($chat_sessions as $session): ?>
-                        <a href="chat.php?session_id=<?php echo $session['id']; ?>" class="chat-item">
-                            <div class="chat-avatar">
-                                <img src="<?php echo !empty($session['profile_pic']) ? htmlspecialchars($session['profile_pic']) : '/api/placeholder/50/50'; ?>" alt="Avatar">
+                    <?php elseif ($page === 'chat'): ?>
+                        <div class="dashboard-header">
+                            <h2>Chat</h2>
+                            <p>Chat dengan mahasiswa lain atau mulai blind chat.</p>
+                        </div>
+                        
+                        <?php if (!empty($blind_chat_message)): ?>
+                        <div class="alert <?php echo strpos($blind_chat_message, 'success') !== false ? 'alert-success' : 'alert-danger'; ?>">
+                            <?php echo $blind_chat_message; ?>
+                        </div>
+                        <?php endif; ?>
+                        
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Blind Chat</h3>
                             </div>
-                            <div class="chat-info">
-                                <div class="chat-name">
-                                    <?php echo htmlspecialchars($session['partner_name']); ?>
-                                    <?php if ($session['is_blind'] && $session['is_approved'] != 1): ?>
-                                        <span class="blind-chat-badge">Anonymous</span>
-                                    <?php elseif ($session['is_blind'] && $session['is_approved'] == 1): ?>
-                                        <span class="approved-chat-badge">Disetujui</span>
-                                    <?php endif; ?>
-                                </div>
-                                <div class="chat-last-msg">
-                                    <?php
-                                    // Cek apakah ada pesan terakhir
-                                    if (isset($session['last_message'])) {
-                                        echo htmlspecialchars(substr($session['last_message'], 0, 30)) . (strlen($session['last_message']) > 30 ? '...' : '');
-                                    } else {
-                                        echo "Belum ada pesan";
-                                    }
-                                    ?>
-                                </div>
+                            <p>Mulai chat dengan mahasiswa acak tanpa melihat profil mereka terlebih dahulu.</p>
+                            <form method="post" style="margin-top: 20px;">
+                                <button type="submit" name="start_blind_chat" class="btn">Mulai Blind Chat</button>
+                            </form>
+                        </div>
+                        
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Chat Aktif</h3>
                             </div>
-                            <div class="chat-time">
-                                <?php
-                                if (isset($session['last_message_time']) && !empty($session['last_message_time'])) {
-                                    echo date('d M', strtotime($session['last_message_time']));
-                                } else {
-                                    echo 'Baru';
-                                }
-                                ?>
+                            <div class="chat-list">
+                                <?php if (empty($chat_sessions)): ?>
+                                    <p>Belum ada chat aktif.</p>
+                                <?php else: ?>
+                                    <?php foreach ($chat_sessions as $session): ?>
+                                        <a href="chat.php?session_id=<?php echo $session['id']; ?>" class="chat-item">
+                                            <div class="chat-avatar">
+                                                <img src="/assets/images/user_profile.png" alt="Avatar">
+                                            </div>
+                                            <div class="chat-info">
+                                                <div class="chat-name">
+                                                    <?php echo htmlspecialchars($session['partner_name']); ?>
+                                                    <?php if ($session['is_blind']): ?>
+                                                        <span style="font-size: 12px; color: var(--primary); text-decoration: none;">(Blind Chat)</span>
+                                                    <?php endif; ?>
+                                                </div>
+                                                <div class="chat-last-msg" style="text-decoration: none;">Klik untuk melihat percakapan</div>
+                                            </div>
+                                            <div class="chat-time">
+                                            <?php echo '<div class="chat-time">';
+                                                if (isset($session['last_message_time']) && !empty($session['last_message_time'])) {
+                                                    echo date('d M', strtotime($session['last_message_time'])); 
+                                                } else {
+                                                     echo 'Baru';  // atau 'Belum chat', atau tampilkan ikon
+                                                }
+                                                echo '</div>'; ?>
+                                            </div>
+                                        </a>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
                             </div>
-                        </a>
-                    <?php endforeach; ?>
-                <?php endif; ?>
-            </div>
-        </div>
-        
-        <div class="tab-content" id="blind-tab">
-            <div class="blind-chat-action">
-                <form method="post">
-                    <button type="submit" name="start_blind_chat" class="btn">
-                        <i class="fas fa-mask"></i> Mulai Anonymous Chat
-                    </button>
-                </form>
-                <p class="help-text">Mulai chat dengan pengguna acak tanpa melihat profil mereka terlebih dahulu.</p>
-            </div>
-            
-            <div class="chat-session-list">
-                <h4>Anonymous Chat Aktif</h4>
-                <?php
-                $has_blind_chats = false;
-                if (!empty($chat_sessions)):
-                    foreach ($chat_sessions as $session):
-                        if ($session['is_blind'] && $session['is_approved'] != 1):
-                            $has_blind_chats = true;
-                ?>
-                        <a href="chat.php?session_id=<?php echo $session['id']; ?>" class="chat-item">
-                            <div class="chat-avatar">
-                                <img src="/api/placeholder/50/50" alt="Anonymous">
-                            </div>
-                            <div class="chat-info">
-                                <div class="chat-name">
-                                    Anonymous User
-                                    <span class="blind-chat-badge">Anonymous</span>
-                                </div>
-                                <div class="chat-last-msg">
-                                    <?php
-                                    // Cek apakah ada pesan terakhir
-                                    if (isset($session['last_message'])) {
-                                        echo htmlspecialchars(substr($session['last_message'], 0, 30)) . (strlen($session['last_message']) > 30 ? '...' : '');
-                                    } else {
-                                        echo "Belum ada pesan";
-                                    }
-                                    ?>
-                                </div>
-                            </div>
-                            <div class="chat-time">
-                                <?php
-                                if (isset($session['last_message_time']) && !empty($session['last_message_time'])) {
-                                    echo date('d M', strtotime($session['last_message_time']));
-                                } else {
-                                    echo 'Baru';
-                                }
-                                ?>
-                            </div>
-                        </a>
-                <?php
-                        endif;
-                    endforeach;
-                endif;
-                
-                if (!$has_blind_chats):
-                ?>
-                    <div class="empty-state">
-                        <p>Belum ada anonymous chat yang aktif. Mulai chat baru sekarang!</p>
-                    </div>
-                <?php endif; ?>
-            </div>
-        </div>
-        
-        <div class="tab-content" id="regular-tab">
-            <div class="chat-session-list">
-                <h4>Chat Biasa Aktif</h4>
-                <?php
-                $has_regular_chats = false;
-                if (!empty($chat_sessions)):
-                    foreach ($chat_sessions as $session):
-                        if (!$session['is_blind'] || ($session['is_blind'] && $session['is_approved'] == 1)):
-                            $has_regular_chats = true;
-                ?>
-                        <a href="chat.php?session_id=<?php echo $session['id']; ?>" class="chat-item">
-                            <div class="chat-avatar">
-                                <img src="<?php echo !empty($session['profile_pic']) ? htmlspecialchars($session['profile_pic']) : '/api/placeholder/50/50'; ?>" alt="<?php echo htmlspecialchars($session['partner_name']); ?>">
-                            </div>
-                            <div class="chat-info">
-                                <div class="chat-name">
-                                    <?php echo htmlspecialchars($session['partner_name']); ?>
-                                    <?php if ($session['is_blind'] && $session['is_approved'] == 1): ?>
-                                        <span class="approved-chat-badge">Disetujui</span>
-                                    <?php endif; ?>
-                                </div>
-                                <div class="chat-last-msg">
-                                    <?php
-                                    // Cek apakah ada pesan terakhir
-                                    if (isset($session['last_message'])) {
-                                        echo htmlspecialchars(substr($session['last_message'], 0, 30)) . (strlen($session['last_message']) > 30 ? '...' : '');
-                                    } else {
-                                        echo "Belum ada pesan";
-                                    }
-                                    ?>
-                                </div>
-                            </div>
-                            <div class="chat-time">
-                                <?php
-                                if (isset($session['last_message_time']) && !empty($session['last_message_time'])) {
-                                    echo date('d M', strtotime($session['last_message_time']));
-                                } else {
-                                    echo 'Baru';
-                                }
-                                ?>
-                            </div>
-                        </a>
-                <?php
-                        endif;
-                    endforeach;
-                endif;
-                
-                if (!$has_regular_chats):
-                ?>
-                    <div class="empty-state">
-                        <p>Belum ada chat biasa yang aktif. Setujui anonymous chat untuk memulai chat biasa.</p>
-                    </div>
-                <?php endif; ?>
-            </div>
-        </div>
-    </div>
-    
-    <script>
-        // Handle tab switching
-        document.querySelectorAll('.chat-tab').forEach(tab => {
-            tab.addEventListener('click', function() {
-                // Update active tab
-                document.querySelectorAll('.chat-tab').forEach(t => t.classList.remove('active'));
-                this.classList.add('active');
-                
-                // Show corresponding content
-                const tabName = this.getAttribute('data-tab');
-                document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-                document.getElementById(tabName + '-tab').classList.add('active');
-            });
-        });
-    </script>
-<?php endif; ?>
+                        </div>
 
 <?php elseif ($page === 'compatibility'): ?>
     <div class="dashboard-header">
