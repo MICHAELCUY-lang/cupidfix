@@ -273,7 +273,7 @@ $chat_sessions_sql = "SELECT cs.*,
                       JOIN users u2 ON cs.user2_id = u2.id
                       LEFT JOIN profiles p ON (CASE WHEN cs.user1_id = ? THEN u2.id ELSE u1.id END) = p.user_id
                       WHERE cs.user1_id = ? OR cs.user2_id = ?
-                      ORDER BY last_message_time DESC NULLS LAST";
+                      ORDER BY CASE WHEN last_message_time IS NULL THEN 0 ELSE 1 END DESC, last_message_time DESC";
 $chat_sessions_stmt = $conn->prepare($chat_sessions_sql);
 $chat_sessions_stmt->bind_param("iiiii", $user_id, $user_id, $user_id, $user_id, $user_id);
 $chat_sessions_stmt->execute();
