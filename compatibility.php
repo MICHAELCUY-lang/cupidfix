@@ -558,7 +558,7 @@ if ($test_taken) {
     <header>
         <div class="container">
             <div class="header-content">
-                <a href="index.php" class="logo">
+                <a href="cupid.php" class="logo">
                     <i class="fas fa-heart"></i> Cupid
                 </a>
                 <nav>
@@ -651,7 +651,7 @@ if ($test_taken) {
                     <?php foreach ($compatible_matches as $match): ?>
                     <div class="match-card">
                         <div class="match-image">
-                            <img src="<?php echo !empty($match['profile_pic']) ? htmlspecialchars($match['profile_pic']) : '/api/placeholder/250/200'; ?>" alt="<?php echo htmlspecialchars($match['name']); ?>">
+                            <img src="<?php echo !empty($match['profile_pic']) ? htmlspecialchars($match['profile_pic']) : '/assets/images/user_profile.png'; ?>" alt="<?php echo htmlspecialchars($match['name']); ?>">
                         </div>
                         <div class="match-info">
                             <div class="match-name">

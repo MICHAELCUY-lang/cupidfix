@@ -1179,7 +1179,7 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                                     <?php foreach ($chat_sessions as $session): ?>
                                         <a href="chat.php?session_id=<?php echo $session['id']; ?>" class="chat-item">
                                             <div class="chat-avatar">
-                                                <img src="/api/placeholder/50/50" alt="Avatar">
+                                                <img src="/assets/images/user_profile.png" alt="Avatar">
                                             </div>
                                             <div class="chat-info">
                                                 <div class="chat-name">
@@ -1506,7 +1506,7 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
             <?php foreach ($compatible_matches as $match): ?>
             <div class="match-card" style="background-color: var(--light); border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); transition: transform 0.3s, box-shadow 0.3s;">
                 <div class="match-image" style="height: 200px; overflow: hidden;">
-                    <img src="<?php echo isset($match['profile_pic']) && !empty($match['profile_pic']) ? htmlspecialchars($match['profile_pic']) : '/api/placeholder/250/200'; ?>" alt="<?php echo htmlspecialchars($match['name']); ?>" style="width: 100%; height: 100%; object-fit: cover;">
+                    <img src="<?php echo isset($match['profile_pic']) && !empty($match['profile_pic']) ? htmlspecialchars($match['profile_pic']) : '/assets/images/user_profile.png'; ?>" alt="<?php echo htmlspecialchars($match['name']); ?>" style="width: 100%; height: 100%; object-fit: cover;">
                 </div>
                 <div class="match-info" style="padding: 20px;">
                     <div class="match-name" style="font-size: 18px; font-weight: 500; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center;">
@@ -1593,7 +1593,7 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                                         <div class="user-card">
                                             <div class="user-card-img">
                                                 <a href="view_profile.php?id=<?php echo $match['id']; ?>" style="display: block; cursor: pointer;">
-                                                    <img src="<?php echo !empty($match['profile_pic']) ? htmlspecialchars($match['profile_pic']) : '/api/placeholder/250/200'; ?>" alt="<?php echo htmlspecialchars($match['name']); ?>">
+                                                    <img src="<?php echo !empty($match['profile_pic']) ? htmlspecialchars($match['profile_pic']) : '/assets/images/user_profile.png'; ?>" alt="<?php echo htmlspecialchars($match['name']); ?>">
                                                 </a>
                                             </div>
                                             <div class="user-card-info">
