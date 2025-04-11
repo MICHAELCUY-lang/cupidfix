@@ -66,73 +66,23 @@ $chat_session = $session_result->fetch_assoc();
 $partner_id = $chat_session['partner_id'];
 $is_blind = $chat_session['is_blind'];
 
-// Tentukan status persetujuan
-$user_approved = false;
-$partner_approved = false;
-
-if ($chat_session['user1_id'] == $user_id) {
-    $user_approved = $chat_session['user1_approved'] == 1;
-    $partner_approved = $chat_session['user2_approved'] == 1;
-} else {
-    $user_approved = $chat_session['user2_approved'] == 1;
-    $partner_approved = $chat_session['user1_approved'] == 1;
-}
-
-$both_approved = $user_approved && $partner_approved;
-
-// Proses persetujuan chat
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['approve_chat'])) {
-    // Tentukan field mana yang akan diupdate berdasarkan user
-    if ($chat_session['user1_id'] == $user_id) {
-        $update_field = 'user1_approved';
-    } else {
-        $update_field = 'user2_approved';
-    }
-    
-    // Update status persetujuan
-    $approve_sql = "UPDATE chat_sessions SET $update_field = 1 WHERE id = ?";
-    $approve_stmt = $conn->prepare($approve_sql);
-    $approve_stmt->bind_param("i", $session_id);
-    
-    if ($approve_stmt->execute()) {
-        // Periksa apakah kedua user sudah menyetujui
-        $check_both_sql = "SELECT user1_approved, user2_approved FROM chat_sessions WHERE id = ?";
-        $check_both_stmt = $conn->prepare($check_both_sql);
-        $check_both_stmt->bind_param("i", $session_id);
-        $check_both_stmt->execute();
-        $approval_result = $check_both_stmt->get_result()->fetch_assoc();
-        
-        if ($approval_result['user1_approved'] == 1 && $approval_result['user2_approved'] == 1) {
-            // Kedua user sudah menyetujui, update is_approved
-            $update_approved_sql = "UPDATE chat_sessions SET is_approved = 1 WHERE id = ?";
-            $update_approved_stmt = $conn->prepare($update_approved_sql);
-            $update_approved_stmt->bind_param("i", $session_id);
-            $update_approved_stmt->execute();
-        }
-        
-        // Refresh halaman
-        header("Location: " . $_SERVER['REQUEST_URI']);
-        exit();
-    }
-}
+// Always assume the chat is approved
+$user_approved = true;
+$partner_approved = true;
+$both_approved = true;
 
 // Handle new message submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_message'])) {
-    // Jika blind chat, pastikan keduanya sudah setuju
-    if ($is_blind && !$both_approved) {
-        $error_message = "Kedua pengguna harus menyetujui chat ini sebelum dapat bertukar pesan.";
+    $message = $_POST['message'];
+    
+    $insert_sql = "INSERT INTO chat_messages (session_id, sender_id, message) VALUES (?, ?, ?)";
+    $insert_stmt = $conn->prepare($insert_sql);
+    $insert_stmt->bind_param("iis", $session_id, $user_id, $message);
+    
+    if ($insert_stmt->execute()) {
+        // Success
     } else {
-        $message = $_POST['message'];
-        
-        $insert_sql = "INSERT INTO chat_messages (session_id, sender_id, message) VALUES (?, ?, ?)";
-        $insert_stmt = $conn->prepare($insert_sql);
-        $insert_stmt->bind_param("iis", $session_id, $user_id, $message);
-        
-        if ($insert_stmt->execute()) {
-            // Success
-        } else {
-            $error_message = "Error sending message: " . $conn->error;
-        }
+        $error_message = "Error sending message: " . $conn->error;
     }
 }
 
@@ -494,6 +444,87 @@ $update_seen_stmt->execute();
             border: 1px solid #f5c6cb;
         }
         
+/* Dropdown Menu */
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+.dropdown-content {
+    display: none;
+    position: absolute;
+    right: 0;
+    background-color: #f9f9f9;
+    min-width: 200px;
+    box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+    z-index: 1;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.dropdown-content a {
+    color: #333;
+    padding: 12px 16px;
+    text-decoration: none;
+    display: block;
+    transition: background-color 0.3s;
+}
+
+.dropdown-content a i {
+    margin-right: 8px;
+    width: 20px;
+    text-align: center;
+}
+
+.dropdown-content a:hover {
+    background-color: #f1f1f1;
+    color: var(--primary);
+}
+
+.show {
+    display: block;
+}
+
+/* Button outline style */
+.btn-outline {
+    background-color: transparent;
+    border: 1px solid var(--primary);
+    color: var(--primary);
+}
+
+.btn-outline:hover {
+    background-color: var(--primary);
+    color: white;
+}
+
+.message-delete {
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.3s;
+    margin-left: 8px;
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.received .message-delete {
+    color: rgba(0, 0, 0, 0.5);
+}
+
+.message:hover .message-delete {
+    opacity: 1;
+}
+
+.message.deleted .message-content {
+    background-color: #f0f0f0 !important;
+    color: #999 !important;
+    font-style: italic;
+}
+
+.message-deleted {
+    padding: 10px;
+    font-size: 14px;
+    color: #999;
+}
+
         @media (max-width: 767px) {
             .message-content {
                 max-width: 85%;
@@ -561,35 +592,37 @@ $update_seen_stmt->execute();
                         <p>
                             <i class="fas fa-mask"></i> 
                             Anonymous Chat
-                            <?php if ($user_approved): ?>
-                                <span class="approved-badge"><i class="fas fa-check-circle"></i> Disetujui</span>
-                            <?php endif; ?>
                         </p>
                     <?php endif; ?>
                 </div>
                 <div class="chat-actions">
-                    <?php if ($is_blind && !$both_approved): ?>
-                        <!-- Tombol approve untuk blind chat -->
-                        <form method="post" class="inline-form">
-                            <?php if (!$user_approved): ?>
-                                <button type="submit" name="approve_chat" class="btn btn-sm" title="Setujui Chat">
-                                    <i class="fas fa-check"></i> Setujui Chat
-                                </button>
-                            <?php endif; ?>
-                        </form>
-                    <?php elseif ($is_blind && $both_approved): ?>
-                        <!-- Tombol lihat profil berbayar -->
-                        <a href="create_profile_payment.php?chat_id=<?php echo $session_id; ?>&partner_id=<?php echo $partner_id; ?>" class="btn btn-sm" title="Lihat Profil">
-                            <i class="fas fa-eye"></i> Lihat Profil (Rp15.000)
-                        </a>
-                    <?php elseif (!$is_blind): ?>
-                        <!-- Chat biasa bisa langsung lihat profil -->
-                        <a href="view_profile.php?id=<?php echo $partner_id; ?>" title="Lihat Profil" class="btn btn-sm">
-                            <i class="fas fa-user"></i> Profil
-                        </a>
-                    <?php endif; ?>
-                </div>
-            </div>
+    <?php if ($is_blind && $both_approved): ?>
+        <!-- Tombol lihat profil berbayar -->
+        <a href="create_profile_payment.php?chat_id=<?php echo $session_id; ?>&partner_id=<?php echo $partner_id; ?>" class="btn btn-sm" title="Lihat Profil">
+            <i class="fas fa-eye"></i> Lihat Profil (Rp15.000)
+        </a>
+    <?php elseif (!$is_blind): ?>
+        <!-- Chat biasa bisa langsung lihat profil -->
+        <a href="view_profile.php?id=<?php echo $partner_id; ?>" title="Lihat Profil" class="btn btn-sm">
+            <i class="fas fa-user"></i> Profil
+        </a>
+    <?php endif; ?>
+    
+    <!-- Delete Chat button -->
+    <div class="dropdown">
+        <button class="btn btn-sm btn-outline" onclick="toggleDeleteMenu()" title="Opsi Lainnya">
+            <i class="fas fa-ellipsis-v"></i>
+        </button>
+        <div id="deleteMenu" class="dropdown-content">
+            <a href="javascript:void(0)" onclick="confirmDeleteChat('for_me')">
+                <i class="fas fa-trash"></i> Hapus Chat Untukku
+            </a>
+            <a href="javascript:void(0)" onclick="confirmDeleteChat('for_everyone')">
+                <i class="fas fa-trash-alt"></i> Hapus Chat Untuk Semua
+            </a>
+        </div>
+    </div>
+</div>
             
             <?php if (isset($error_message)): ?>
             <div class="alert alert-danger">
@@ -598,62 +631,118 @@ $update_seen_stmt->execute();
             </div>
             <?php endif; ?>
             
-            <?php if ($is_blind && !$both_approved): ?>
+            <?php if ($is_blind): ?>
                 <div class="blind-chat-notice">
                     <i class="fas fa-info-circle"></i> 
-                    <?php if ($partner_approved && !$user_approved): ?>
-                        Lawan bicara telah menyetujui chat ini. Silakan klik tombol 'Setujui Chat' untuk mulai berkomunikasi.
-                    <?php elseif ($user_approved && !$partner_approved): ?>
-                        Anda telah menyetujui chat ini. Menunggu lawan bicara untuk menyetujui.
-                    <?php else: ?>
-                        Ini adalah blind chat. Kedua pengguna harus menyetujui untuk dapat saling berkomunikasi.
-                    <?php endif; ?>
-                </div>
-                
-                <!-- Jika belum disetujui keduanya, batasi interaksi -->
-                <div class="approval-required-message">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <p>Kedua pengguna harus menyetujui chat ini sebelum dapat bertukar pesan.</p>
-                </div>
-            <?php else: ?>
-                <!-- Tampilkan chat jika sudah disetujui keduanya atau bukan blind chat -->
-                <div class="chat-messages" id="chat-messages">
-                    <?php if (empty($messages)): ?>
-                        <div style="text-align: center; padding: 20px; color: #999;">
-                            <p>Belum ada pesan. Mulai percakapan sekarang!</p>
-                        </div>
-                    <?php else: ?>
-                        <?php foreach ($messages as $message): ?>
-                            <div class="message <?php echo $message['sender_id'] === $user_id ? 'sent' : 'received'; ?>">
-                                <div class="message-content">
-                                    <div class="message-text">
-                                        <?php echo nl2br(htmlspecialchars($message['message'])); ?>
-                                    </div>
-                                    <div class="message-time">
-                                        <?php echo date('H:i', strtotime($message['created_at'])); ?>
-                                    </div>
-                                </div>
-                            </div>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                </div>
-                
-                <div class="chat-input">
-                    <form method="post" class="chat-form">
-                        <input type="text" name="message" placeholder="Ketik pesan..." required autofocus>
-                        <button type="submit" name="send_message"><i class="fas fa-paper-plane"></i></button>
-                    </form>
+                    Ini adalah anonymous chat. Identitas tidak terungkap sampai profil dibuka.
                 </div>
             <?php endif; ?>
+            
+            <!-- Chat Messages -->
+            <div class="chat-messages" id="chat-messages">
+    <?php if (empty($messages)): ?>
+        <div style="text-align: center; padding: 20px; color: #999;">
+            <p>Belum ada pesan. Mulai percakapan sekarang!</p>
+        </div>
+    <?php else: ?>
+        <?php foreach ($messages as $message): ?>
+            <div class="message <?php echo $message['sender_id'] === $user_id ? 'sent' : 'received'; ?>" id="message-<?php echo $message['id']; ?>">
+                <div class="message-content">
+                    <div class="message-text">
+                        <?php echo nl2br(htmlspecialchars($message['message'])); ?>
+                    </div>
+                    <div class="message-time">
+                        <?php echo date('H:i', strtotime($message['created_at'])); ?>
+                        <?php if ($message['sender_id'] === $user_id): ?>
+                            <span class="message-delete" onclick="confirmDeleteMessage(<?php echo $message['id']; ?>)">
+                                <i class="fas fa-trash-alt"></i>
+                            </span>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    <?php endif; ?>
+</div>
+            
+            <div class="chat-input">
+                <form method="post" class="chat-form">
+                    <input type="text" name="message" placeholder="Ketik pesan..." required autofocus>
+                    <button type="submit" name="send_message"><i class="fas fa-paper-plane"></i></button>
+                </form>
+            </div>
         </div>
     </section>
-
-    <script>
-        // Auto scroll to bottom of chat
-        const chatMessages = document.getElementById('chat-messages');
-        if (chatMessages) {
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+        
+<script>
+    // Auto scroll to bottom of chat
+    const chatMessages = document.getElementById('chat-messages');
+    if (chatMessages) {
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+    
+    // Toggle dropdown menu
+    function toggleDeleteMenu() {
+        document.getElementById("deleteMenu").classList.toggle("show");
+    }
+    
+    // Close the dropdown if clicked outside
+    window.onclick = function(event) {
+        if (!event.target.matches('.btn-outline') && !event.target.matches('.fa-ellipsis-v')) {
+            const dropdowns = document.getElementsByClassName("dropdown-content");
+            for (let i = 0; i < dropdowns.length; i++) {
+                const openDropdown = dropdowns[i];
+                if (openDropdown.classList.contains('show')) {
+                    openDropdown.classList.remove('show');
+                }
+            }
         }
-    </script>
+    }
+    
+    // Confirm delete chat
+    function confirmDeleteChat(deleteType) {
+        let confirmMessage = '';
+        
+        if (deleteType === 'for_me') {
+            confirmMessage = 'Hapus chat ini hanya untuk Anda? Chat ini akan dihapus dari daftar chat Anda.';
+        } else if (deleteType === 'for_everyone') {
+            confirmMessage = 'Hapus chat ini untuk semua? Semua pesan akan dihapus untuk Anda dan lawan bicara.';
+        }
+        
+        if (confirm(confirmMessage)) {
+            deleteChat(deleteType);
+        }
+    }
+    
+    // Delete chat function
+    function deleteChat(deleteType) {
+        const sessionId = <?php echo $session_id; ?>;
+        
+        // Create form data
+        const formData = new FormData();
+        formData.append('session_id', sessionId);
+        formData.append('delete_type', deleteType);
+        
+        // Send delete request
+        fetch('delete_chat.php', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Chat berhasil dihapus');
+                // Redirect to dashboard
+                window.location.href = 'dashboard.php?page=chat';
+            } else {
+                alert('Gagal menghapus chat: ' + data.message);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Terjadi kesalahan saat menghapus chat');
+        });
+    }
+</script>
 </body>
 </html>

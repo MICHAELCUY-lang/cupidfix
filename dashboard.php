@@ -255,7 +255,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['start_blind_chat'])) 
     }
 }
 
-// Get active chat sessions
+// Get active chat sessions (excluding hidden chats)
 $chat_sessions_sql = "SELECT cs.*, 
                       u1.name as user1_name, 
                       u2.name as user2_name,
@@ -265,10 +265,11 @@ $chat_sessions_sql = "SELECT cs.*,
                       FROM chat_sessions cs
                       JOIN users u1 ON cs.user1_id = u1.id
                       JOIN users u2 ON cs.user2_id = u2.id
-                      WHERE cs.user1_id = ? OR cs.user2_id = ?
+                      LEFT JOIN hidden_chats hc ON cs.id = hc.session_id AND hc.user_id = ?
+                      WHERE (cs.user1_id = ? OR cs.user2_id = ?) AND hc.id IS NULL
                       ORDER BY last_message_time DESC";
 $chat_sessions_stmt = $conn->prepare($chat_sessions_sql);
-$chat_sessions_stmt->bind_param("iiii", $user_id, $user_id, $user_id, $user_id);
+$chat_sessions_stmt->bind_param("iiiii", $user_id, $user_id, $user_id, $user_id, $user_id);
 $chat_sessions_stmt->execute();
 $chat_sessions_result = $chat_sessions_stmt->get_result();
 $chat_sessions = [];

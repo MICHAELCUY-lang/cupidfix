@@ -162,6 +162,13 @@ ALTER TABLE chat_sessions ADD COLUMN is_approved TINYINT(1) DEFAULT 0;
 ALTER TABLE chat_sessions ADD COLUMN user1_approved TINYINT(1) DEFAULT 0;
 ALTER TABLE chat_sessions ADD COLUMN user2_approved TINYINT(1) DEFAULT 0;
 
+CREATE TABLE deleted_messages (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    message_id INT NOT NULL,
+    session_id INT NOT NULL,
+    deleted_at INT NOT NULL,
+    INDEX (session_id, deleted_at)
+);
 -- Script untuk Login dan Register
 
 -- login.php
