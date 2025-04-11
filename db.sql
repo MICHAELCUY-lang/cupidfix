@@ -158,6 +158,10 @@ ADD COLUMN reset_token_expiry DATETIME NULL;
 ALTER TABLE compatibility_results 
 MODIFY interests VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+ALTER TABLE chat_sessions ADD COLUMN is_approved TINYINT(1) DEFAULT 0;
+ALTER TABLE chat_sessions ADD COLUMN user1_approved TINYINT(1) DEFAULT 0;
+ALTER TABLE chat_sessions ADD COLUMN user2_approved TINYINT(1) DEFAULT 0;
+
 -- Script untuk Login dan Register
 
 -- login.php

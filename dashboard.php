@@ -1,5 +1,6 @@
 <?php
 // Sertakan file konfigurasi
+
 require_once 'config.php';
 
 // Pastikan user sudah login
@@ -260,14 +261,21 @@ $chat_sessions_sql = "SELECT cs.*,
                       u2.name as user2_name,
                       CASE WHEN cs.user1_id = ? THEN u2.name ELSE u1.name END as partner_name,
                       CASE WHEN cs.user1_id = ? THEN u2.id ELSE u1.id END as partner_id,
-                      (SELECT MAX(created_at) FROM chat_messages WHERE session_id = cs.id) as last_message_time
+                      p.profile_pic,
+                      cs.is_blind,
+                      cs.is_approved,
+                      cs.user1_approved,
+                      cs.user2_approved,
+                      (SELECT message FROM chat_messages WHERE session_id = cs.id ORDER BY created_at DESC LIMIT 1) as last_message,
+                      (SELECT created_at FROM chat_messages WHERE session_id = cs.id ORDER BY created_at DESC LIMIT 1) as last_message_time
                       FROM chat_sessions cs
                       JOIN users u1 ON cs.user1_id = u1.id
                       JOIN users u2 ON cs.user2_id = u2.id
+                      LEFT JOIN profiles p ON (CASE WHEN cs.user1_id = ? THEN u2.id ELSE u1.id END) = p.user_id
                       WHERE cs.user1_id = ? OR cs.user2_id = ?
-                      ORDER BY last_message_time DESC";
+                      ORDER BY last_message_time DESC NULLS LAST";
 $chat_sessions_stmt = $conn->prepare($chat_sessions_sql);
-$chat_sessions_stmt->bind_param("iiii", $user_id, $user_id, $user_id, $user_id);
+$chat_sessions_stmt->bind_param("iiiii", $user_id, $user_id, $user_id, $user_id, $user_id);
 $chat_sessions_stmt->execute();
 $chat_sessions_result = $chat_sessions_stmt->get_result();
 $chat_sessions = [];
@@ -370,6 +378,7 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cupid - Dashboard</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
+    <link href="assets/css/style.css" rel="stylesheet">
     <style>
         :root {
             --primary: #ff4b6e;
@@ -1021,65 +1030,291 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                             </div>
                         </div>
                     
-                    <?php elseif ($page === 'profile'): ?>
-                        <div class="dashboard-header">
-                            <h2>Profil</h2>
-                            <p>Kelola informasi profil Anda.</p>
-                        </div>
-                        
-                        <?php if (!empty($profile_message)): ?>
-                        <div class="alert <?php echo strpos($profile_message, 'success') !== false ? 'alert-success' : 'alert-danger'; ?>">
-                            <?php echo $profile_message; ?>
-                        </div>
-                        <?php endif; ?>
-                        
-                        <div class="card">
-                            <div class="card-header">
-                                <h3>Edit Profil</h3>
-                            </div>
-                            
-                            <?php if ($profile): ?>
-                            <div class="profile-header">
-                                <div class="profile-pic">
-                                    <img src="<?php echo !empty($profile['profile_pic']) ? htmlspecialchars($profile['profile_pic']) : 'uploads/profiles/default.jpg'; ?>" alt="Profile Picture">
-                                </div>
-                                <div class="profile-info">
-                                    <h3><?php echo htmlspecialchars($user['name']); ?></h3>
-                                    <p><?php echo htmlspecialchars($profile['major']); ?></p>
-                                </div>
-                            </div>
-                            <?php endif; ?>
-                            
-                            <form method="post" enctype="multipart/form-data">
-                                <div class="form-group">
-                                    <label for="profile_pic">Foto Profil</label>
-                                    <input type="file" id="profile_pic" name="profile_pic">
-                                </div>
-                                <div class="form-group">
-                                    <label for="bio">Bio</label>
-                                    <textarea id="bio" name="bio" placeholder="Ceritakan tentang diri Anda..."><?php echo $profile ? htmlspecialchars($profile['bio']) : ''; ?></textarea>
-                                </div>
-                                <div class="form-group">
-                                    <label for="interests">Minat & Hobi</label>
-                                    <textarea id="interests" name="interests" placeholder="Masukkan minat dan hobi Anda (pisahkan dengan koma)"><?php echo $profile ? htmlspecialchars($profile['interests']) : ''; ?></textarea>
-                                </div>
-                                <div class="form-group">
-                                    <label for="major">Jurusan</label>
-                                    <input type="text" id="major" name="major" placeholder="Masukkan jurusan Anda" value="<?php echo $profile ? htmlspecialchars($profile['major']) : ''; ?>">
-                                </div>
-                                <div class="form-group">
-                                    <label for="looking_for">Mencari</label>
-                                    <select id="looking_for" name="looking_for">
-                                        <option value="friends" <?php echo ($profile && $profile['looking_for'] === 'friends') ? 'selected' : ''; ?>>Teman</option>
-                                        <option value="study_partner" <?php echo ($profile && $profile['looking_for'] === 'study_partner') ? 'selected' : ''; ?>>Partner Belajar</option>
-                                        <option value="romance" <?php echo ($profile && $profile['looking_for'] === 'romance') ? 'selected' : ''; ?>>Romansa</option>
-                                    </select>
-                                </div>
-                                <button type="submit" name="update_profile" class="btn">Simpan Profil</button>
-                            </form>
-                        </div>
+                   
+<?php elseif ($page === 'profile'): ?>
+    <div class="dashboard-header">
+        <h2>Profil</h2>
+        <p>Kelola informasi profil Anda untuk meningkatkan peluang menemukan pasangan yang cocok.</p>
+    </div>
+    
+    <?php if (!empty($profile_message)): ?>
+    <div class="alert <?php echo strpos($profile_message, 'success') !== false ? 'alert-success' : 'alert-danger'; ?>">
+        <i class="<?php echo strpos($profile_message, 'success') !== false ? 'fas fa-check-circle' : 'fas fa-exclamation-circle'; ?>"></i>
+        <?php echo $profile_message; ?>
+    </div>
+    <?php endif; ?>
+    
+    <div class="card">
+        <div class="card-header">
+            <h3>Informasi Profil</h3>
+        </div>
+        
+        <div class="profile-header">
+            <div class="profile-pic">
+                <img src="<?php echo !empty($profile['profile_pic']) ? htmlspecialchars($profile['profile_pic']) : '/api/placeholder/400/400'; ?>" alt="Profile Picture">
+                <label for="profile_pic" class="edit-pic-button">
+                    <i class="fas fa-camera"></i>
+                </label>
+            </div>
+            <div class="profile-info">
+                <h3><?php echo htmlspecialchars($user['name']); ?></h3>
+                <p><i class="fas fa-envelope"></i> <?php echo htmlspecialchars($user['email']); ?></p>
+                <?php if(!empty($profile['major'])): ?>
+                <p><i class="fas fa-graduation-cap"></i> <?php echo htmlspecialchars($profile['major']); ?></p>
+                <?php endif; ?>
+            </div>
+        </div>
+        
+        <div class="profile-completion">
+            <?php
+            // Calculate profile completion percentage
+            $total_fields = 5; // Name, email, bio, interests, major
+            $filled_fields = 2; // Name and email are always filled
+            
+            if (!empty($profile)) {
+                if (!empty($profile['bio'])) $filled_fields++;
+                if (!empty($profile['interests'])) $filled_fields++;
+                if (!empty($profile['major'])) $filled_fields++;
+            }
+            
+            $completion_percentage = round(($filled_fields / $total_fields) * 100);
+            ?>
+            <div class="completion-text">
+                <span>Kelengkapan Profil</span>
+                <span><?php echo $completion_percentage; ?>%</span>
+            </div>
+            <div class="completion-bar">
+                <div class="completion-progress" style="width: <?php echo $completion_percentage; ?>%;"></div>
+            </div>
+        </div>
+        
+        <div class="profile-tabs">
+            <div class="profile-tab active" data-tab="basic">Informasi Dasar</div>
+            <div class="profile-tab" data-tab="details">Detail Diri</div>
+            <div class="profile-tab" data-tab="privacy">Privasi</div>
+        </div>
+        
+        <form method="post" enctype="multipart/form-data">
+            <!-- Basic Information Tab -->
+            <div class="tab-content active" id="basic-tab">
+                <div class="form-group">
+                    <label for="name">Nama Lengkap</label>
+                    <input type="text" id="name" name="name" class="form-control" value="<?php echo htmlspecialchars($user['name']); ?>">
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email" class="form-control" value="<?php echo htmlspecialchars($user['email']); ?>" readonly>
+                    <div class="help-text">Email tidak dapat diubah karena digunakan untuk verifikasi.</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="major">Jurusan</label>
+                    <select id="major" name="major" class="form-control">
+                        <option value="">-- Pilih Jurusan --</option>
+                        <option value="Computer Science" <?php echo ($profile && $profile['major'] === 'Computer Science') ? 'selected' : ''; ?>>Computer Science</option>
+                        <option value="Business" <?php echo ($profile && $profile['major'] === 'Business') ? 'selected' : ''; ?>>Business</option>
+                        <option value="Law" <?php echo ($profile && $profile['major'] === 'Law') ? 'selected' : ''; ?>>Law</option>
+                        <option value="Medicine" <?php echo ($profile && $profile['major'] === 'Medicine') ? 'selected' : ''; ?>>Medicine</option>
+                        <option value="Engineering" <?php echo ($profile && $profile['major'] === 'Engineering') ? 'selected' : ''; ?>>Engineering</option>
+                        <option value="Graphic Design" <?php echo ($profile && $profile['major'] === 'Graphic Design') ? 'selected' : ''; ?>>Graphic Design</option>
+                        <option value="Psychology" <?php echo ($profile && $profile['major'] === 'Psychology') ? 'selected' : ''; ?>>Psychology</option>
+                        <option value="Communication" <?php echo ($profile && $profile['major'] === 'Communication') ? 'selected' : ''; ?>>Communication</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="profile_pic">Foto Profil</label>
+                    <div class="file-upload">
+                        <input type="text" class="form-control" readonly placeholder="Pilih file foto..." id="file-name">
+                        <label for="profile_pic" class="file-upload-btn">Browse</label>
+                    </div>
+                    <input type="file" id="profile_pic" name="profile_pic" style="display: none;">
+                    <div class="help-text">Format yang didukung: JPG, PNG, GIF. Maksimal 2MB.</div>
+                </div>
+            </div>
+            
+            <!-- Details Tab -->
+            <div class="tab-content" id="details-tab">
+                <div class="form-group">
+                    <label for="bio">Bio</label>
+                    <textarea id="bio" name="bio" class="form-control" rows="5" placeholder="Ceritakan tentang dirimu..."><?php echo $profile ? htmlspecialchars($profile['bio']) : ''; ?></textarea>
+                    <div class="help-text">Maksimal 500 karakter. Ceritakan tentang hobi, kesukaan, dan hal menarik tentang dirimu.</div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="interests">Minat & Hobi</label>
+                    <textarea id="interests" name="interests" class="form-control" rows="3" placeholder="Masukkan minat dan hobi (pisahkan dengan koma)"><?php echo $profile ? htmlspecialchars($profile['interests']) : ''; ?></textarea>
+                    <div class="help-text">Contoh: Musik, Film, Fotografi, Hiking, Coding</div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Minat yang Ditambahkan</label>
+                    <div class="interests-container" id="interests-display">
+                        <?php 
+                        if ($profile && !empty($profile['interests'])) {
+                            $interests_array = explode(',', $profile['interests']);
+                            foreach ($interests_array as $interest) {
+                                $interest = trim($interest);
+                                if (!empty($interest)) {
+                                    echo '<span class="interest-tag">' . htmlspecialchars($interest) . ' <i class="fas fa-times"></i></span>';
+                                }
+                            }
+                        } else {
+                            echo '<span class="text-muted">Belum ada minat yang ditambahkan</span>';
+                        }
+                        ?>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="looking_for">Mencari</label>
+                    <select id="looking_for" name="looking_for" class="form-control">
+                        <option value="friends" <?php echo ($profile && $profile['looking_for'] === 'friends') ? 'selected' : ''; ?>>Teman</option>
+                        <option value="study_partner" <?php echo ($profile && $profile['looking_for'] === 'study_partner') ? 'selected' : ''; ?>>Partner Belajar</option>
+                        <option value="romance" <?php echo ($profile && $profile['looking_for'] === 'romance') ? 'selected' : ''; ?>>Romansa</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Privacy Tab -->
+            <div class="tab-content" id="privacy-tab">
+                <div class="privacy-option">
+                    <h4>
+                        Tampilkan Profil Dalam Pencarian
+                        <label class="toggle">
+                            <input type="checkbox" name="searchable" <?php echo ($profile && isset($profile['searchable']) && $profile['searchable'] == 1) ? 'checked' : ''; ?>>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </h4>
+                    <p>Izinkan pengguna lain menemukan profil Anda dalam hasil pencarian dan rekomendasi kecocokan.</p>
+                </div>
+                
+                <div class="privacy-option">
+                    <h4>
+                        Tampilkan Status Online
+                        <label class="toggle">
+                            <input type="checkbox" name="show_online" <?php echo ($profile && isset($profile['show_online']) && $profile['show_online'] == 1) ? 'checked' : ''; ?>>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </h4>
+                    <p>Tampilkan status online Anda kepada pengguna lain.</p>
+                </div>
+                
+                <div class="privacy-option">
+                    <h4>
+                        Terima Pesan dari Siapa Saja
+                        <label class="toggle">
+                            <input type="checkbox" name="allow_messages" <?php echo ($profile && isset($profile['allow_messages']) && $profile['allow_messages'] == 1) ? 'checked' : ''; ?>>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </h4>
+                    <p>Izinkan pesan dari pengguna yang belum terhubung dengan Anda.</p>
+                </div>
+                
+                <div class="privacy-option">
+                    <h4>
+                        Tampilkan Jurusan
+                        <label class="toggle">
+                            <input type="checkbox" name="show_major" <?php echo ($profile && isset($profile['show_major']) && $profile['show_major'] == 1) ? 'checked' : ''; ?>>
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </h4>
+                    <p>Tampilkan informasi jurusan Anda kepada pengguna lain.</p>
+                </div>
+            </div>
+            
+            <div class="submit-wrapper">
+                <button type="submit" name="update_profile" class="btn">
+                    <i class="fas fa-save"></i> Simpan Profil
+                </button>
+            </div>
+        </form>
+    </div>
+    
+    <script>
+        // Handle tab switching
+        document.querySelectorAll('.profile-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                // Update active tab
+                document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Show corresponding content
+                const tabName = this.getAttribute('data-tab');
+                document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                document.getElementById(tabName + '-tab').classList.add('active');
+            });
+        });
+        
+        // Handle file upload preview
+        document.getElementById('profile_pic').addEventListener('change', function() {
+            if (this.files && this.files[0]) {
+                const fileName = this.files[0].name;
+                document.getElementById('file-name').value = fileName;
+                
+                // Optional: Preview the image
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const profilePic = document.querySelector('.profile-pic img');
+                    profilePic.src = e.target.result;
+                }
+                reader.readAsDataURL(this.files[0]);
+            }
+        });
+        
+        // Handle dynamic interests display
+        const interestsInput = document.getElementById('interests');
+        const interestsDisplay = document.getElementById('interests-display');
+        
+        interestsInput.addEventListener('input', function() {
+            const interests = this.value.split(',').filter(interest => interest.trim() !== '');
+            
+            if (interests.length > 0) {
+                interestsDisplay.innerHTML = '';
+                
+                interests.forEach(interest => {
+                    const tag = document.createElement('span');
+                    tag.className = 'interest-tag';
+                    tag.innerHTML = interest.trim() + ' <i class="fas fa-times"></i>';
+                    interestsDisplay.appendChild(tag);
                     
-                    <?php elseif ($page === 'menfess'): ?>
+                    // Add event listener to remove tag when clicked
+                    tag.querySelector('i').addEventListener('click', function() {
+                        const removedInterest = this.parentNode.textContent.trim().slice(0, -1).trim();
+                        const currentInterests = interestsInput.value.split(',').map(i => i.trim());
+                        const filteredInterests = currentInterests.filter(i => i !== removedInterest);
+                        interestsInput.value = filteredInterests.join(', ');
+                        this.parentNode.remove();
+                        
+                        if (interestsDisplay.children.length === 0) {
+                            interestsDisplay.innerHTML = '<span class="text-muted">Belum ada minat yang ditambahkan</span>';
+                        }
+                    });
+                });
+            } else {
+                interestsDisplay.innerHTML = '<span class="text-muted">Belum ada minat yang ditambahkan</span>';
+            }
+        });
+        
+        // Add click event to existing interest tags
+        document.querySelectorAll('.interest-tag i').forEach(icon => {
+            icon.addEventListener('click', function() {
+                const removedInterest = this.parentNode.textContent.trim().slice(0, -1).trim();
+                const currentInterests = interestsInput.value.split(',').map(i => i.trim());
+                const filteredInterests = currentInterests.filter(i => i !== removedInterest);
+                interestsInput.value = filteredInterests.join(', ');
+                this.parentNode.remove();
+                
+                if (interestsDisplay.children.length === 0) {
+                    interestsDisplay.innerHTML = '<span class="text-muted">Belum ada minat yang ditambahkan</span>';
+                }
+            });
+        });
+    </script>
+<?php endif; ?>
+                        
+                    <?php if ($page === 'menfess'): ?>
                         <div class="dashboard-header">
                             <h2>Anonymous Crush Menfess</h2>
                             <p>Kirim pesan anonim ke crush Anda. Jika keduanya saling suka, nama akan terungkap!</p>
@@ -1146,64 +1381,219 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                             </div>
                         </div>
                     
-                    <?php elseif ($page === 'chat'): ?>
-                        <div class="dashboard-header">
-                            <h2>Chat</h2>
-                            <p>Chat dengan mahasiswa lain atau mulai blind chat.</p>
-                        </div>
-                        
-                        <?php if (!empty($blind_chat_message)): ?>
-                        <div class="alert <?php echo strpos($blind_chat_message, 'success') !== false ? 'alert-success' : 'alert-danger'; ?>">
-                            <?php echo $blind_chat_message; ?>
-                        </div>
-                        <?php endif; ?>
-                        
-                        <div class="card">
-                            <div class="card-header">
-                                <h3>Blind Chat</h3>
+                    <?php if ($page === 'chat'): ?>
+    <div class="dashboard-header">
+        <h2>Chat</h2>
+        <p>Chat dengan pengguna lain dan temukan teman baru.</p>
+    </div>
+    
+    <div class="card">
+        <div class="card-header">
+            <h3>Chat Menu</h3>
+        </div>
+        
+        <div class="chat-tabs">
+            <div class="chat-tab active" data-tab="all">Semua Chat</div>
+            <div class="chat-tab" data-tab="blind">Anonymous Chat</div>
+            <div class="chat-tab" data-tab="regular">Chat Biasa</div>
+        </div>
+        
+        <div class="tab-content active" id="all-tab">
+            <?php
+            // Tambahkan tombol untuk memulai blind chat baru
+            ?>
+            <div class="blind-chat-action">
+                <form method="post">
+                    <button type="submit" name="start_blind_chat" class="btn">
+                        <i class="fas fa-mask"></i> Mulai Anonymous Chat
+                    </button>
+                </form>
+                <p class="help-text">Mulai chat dengan pengguna acak tanpa melihat profil mereka terlebih dahulu.</p>
+            </div>
+            
+            <div class="chat-session-list">
+                <h4>Daftar Chat Aktif</h4>
+                <?php if (empty($chat_sessions)): ?>
+                    <div class="empty-state">
+                        <p>Belum ada chat yang aktif. Mulai chat baru sekarang!</p>
+                    </div>
+                <?php else: ?>
+                    <?php foreach ($chat_sessions as $session): ?>
+                        <a href="chat.php?session_id=<?php echo $session['id']; ?>" class="chat-item">
+                            <div class="chat-avatar">
+                                <img src="<?php echo !empty($session['profile_pic']) ? htmlspecialchars($session['profile_pic']) : '/api/placeholder/50/50'; ?>" alt="Avatar">
                             </div>
-                            <p>Mulai chat dengan mahasiswa acak tanpa melihat profil mereka terlebih dahulu.</p>
-                            <form method="post" style="margin-top: 20px;">
-                                <button type="submit" name="start_blind_chat" class="btn">Mulai Blind Chat</button>
-                            </form>
-                        </div>
-                        
-                        <div class="card">
-                            <div class="card-header">
-                                <h3>Chat Aktif</h3>
+                            <div class="chat-info">
+                                <div class="chat-name">
+                                    <?php echo htmlspecialchars($session['partner_name']); ?>
+                                    <?php if ($session['is_blind'] && $session['is_approved'] != 1): ?>
+                                        <span class="blind-chat-badge">Anonymous</span>
+                                    <?php elseif ($session['is_blind'] && $session['is_approved'] == 1): ?>
+                                        <span class="approved-chat-badge">Disetujui</span>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="chat-last-msg">
+                                    <?php
+                                    // Cek apakah ada pesan terakhir
+                                    if (isset($session['last_message'])) {
+                                        echo htmlspecialchars(substr($session['last_message'], 0, 30)) . (strlen($session['last_message']) > 30 ? '...' : '');
+                                    } else {
+                                        echo "Belum ada pesan";
+                                    }
+                                    ?>
+                                </div>
                             </div>
-                            <div class="chat-list">
-                                <?php if (empty($chat_sessions)): ?>
-                                    <p>Belum ada chat aktif.</p>
-                                <?php else: ?>
-                                    <?php foreach ($chat_sessions as $session): ?>
-                                        <a href="chat.php?session_id=<?php echo $session['id']; ?>" class="chat-item">
-                                            <div class="chat-avatar">
-                                                <img src="/assets/images/user_profile.png" alt="Avatar">
-                                            </div>
-                                            <div class="chat-info">
-                                                <div class="chat-name">
-                                                    <?php echo htmlspecialchars($session['partner_name']); ?>
-                                                    <?php if ($session['is_blind']): ?>
-                                                        <span style="font-size: 12px; color: var(--primary);">(Blind Chat)</span>
-                                                    <?php endif; ?>
-                                                </div>
-                                                <div class="chat-last-msg">Klik untuk melihat percakapan</div>
-                                            </div>
-                                            <div class="chat-time">
-                                            <?php echo '<div class="chat-time">';
-                                                if (isset($session['last_message_time']) && !empty($session['last_message_time'])) {
-                                                    echo date('d M', strtotime($session['last_message_time']));
-                                                } else {
-                                                     echo 'Baru';  // atau 'Belum chat', atau tampilkan ikon
-                                                }
-                                                echo '</div>'; ?>
-                                            </div>
-                                        </a>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
+                            <div class="chat-time">
+                                <?php
+                                if (isset($session['last_message_time']) && !empty($session['last_message_time'])) {
+                                    echo date('d M', strtotime($session['last_message_time']));
+                                } else {
+                                    echo 'Baru';
+                                }
+                                ?>
                             </div>
-                        </div>
+                        </a>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+        
+        <div class="tab-content" id="blind-tab">
+            <div class="blind-chat-action">
+                <form method="post">
+                    <button type="submit" name="start_blind_chat" class="btn">
+                        <i class="fas fa-mask"></i> Mulai Anonymous Chat
+                    </button>
+                </form>
+                <p class="help-text">Mulai chat dengan pengguna acak tanpa melihat profil mereka terlebih dahulu.</p>
+            </div>
+            
+            <div class="chat-session-list">
+                <h4>Anonymous Chat Aktif</h4>
+                <?php
+                $has_blind_chats = false;
+                if (!empty($chat_sessions)):
+                    foreach ($chat_sessions as $session):
+                        if ($session['is_blind'] && $session['is_approved'] != 1):
+                            $has_blind_chats = true;
+                ?>
+                        <a href="chat.php?session_id=<?php echo $session['id']; ?>" class="chat-item">
+                            <div class="chat-avatar">
+                                <img src="/api/placeholder/50/50" alt="Anonymous">
+                            </div>
+                            <div class="chat-info">
+                                <div class="chat-name">
+                                    Anonymous User
+                                    <span class="blind-chat-badge">Anonymous</span>
+                                </div>
+                                <div class="chat-last-msg">
+                                    <?php
+                                    // Cek apakah ada pesan terakhir
+                                    if (isset($session['last_message'])) {
+                                        echo htmlspecialchars(substr($session['last_message'], 0, 30)) . (strlen($session['last_message']) > 30 ? '...' : '');
+                                    } else {
+                                        echo "Belum ada pesan";
+                                    }
+                                    ?>
+                                </div>
+                            </div>
+                            <div class="chat-time">
+                                <?php
+                                if (isset($session['last_message_time']) && !empty($session['last_message_time'])) {
+                                    echo date('d M', strtotime($session['last_message_time']));
+                                } else {
+                                    echo 'Baru';
+                                }
+                                ?>
+                            </div>
+                        </a>
+                <?php
+                        endif;
+                    endforeach;
+                endif;
+                
+                if (!$has_blind_chats):
+                ?>
+                    <div class="empty-state">
+                        <p>Belum ada anonymous chat yang aktif. Mulai chat baru sekarang!</p>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+        
+        <div class="tab-content" id="regular-tab">
+            <div class="chat-session-list">
+                <h4>Chat Biasa Aktif</h4>
+                <?php
+                $has_regular_chats = false;
+                if (!empty($chat_sessions)):
+                    foreach ($chat_sessions as $session):
+                        if (!$session['is_blind'] || ($session['is_blind'] && $session['is_approved'] == 1)):
+                            $has_regular_chats = true;
+                ?>
+                        <a href="chat.php?session_id=<?php echo $session['id']; ?>" class="chat-item">
+                            <div class="chat-avatar">
+                                <img src="<?php echo !empty($session['profile_pic']) ? htmlspecialchars($session['profile_pic']) : '/api/placeholder/50/50'; ?>" alt="<?php echo htmlspecialchars($session['partner_name']); ?>">
+                            </div>
+                            <div class="chat-info">
+                                <div class="chat-name">
+                                    <?php echo htmlspecialchars($session['partner_name']); ?>
+                                    <?php if ($session['is_blind'] && $session['is_approved'] == 1): ?>
+                                        <span class="approved-chat-badge">Disetujui</span>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="chat-last-msg">
+                                    <?php
+                                    // Cek apakah ada pesan terakhir
+                                    if (isset($session['last_message'])) {
+                                        echo htmlspecialchars(substr($session['last_message'], 0, 30)) . (strlen($session['last_message']) > 30 ? '...' : '');
+                                    } else {
+                                        echo "Belum ada pesan";
+                                    }
+                                    ?>
+                                </div>
+                            </div>
+                            <div class="chat-time">
+                                <?php
+                                if (isset($session['last_message_time']) && !empty($session['last_message_time'])) {
+                                    echo date('d M', strtotime($session['last_message_time']));
+                                } else {
+                                    echo 'Baru';
+                                }
+                                ?>
+                            </div>
+                        </a>
+                <?php
+                        endif;
+                    endforeach;
+                endif;
+                
+                if (!$has_regular_chats):
+                ?>
+                    <div class="empty-state">
+                        <p>Belum ada chat biasa yang aktif. Setujui anonymous chat untuk memulai chat biasa.</p>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Handle tab switching
+        document.querySelectorAll('.chat-tab').forEach(tab => {
+            tab.addEventListener('click', function() {
+                // Update active tab
+                document.querySelectorAll('.chat-tab').forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Show corresponding content
+                const tabName = this.getAttribute('data-tab');
+                document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                document.getElementById(tabName + '-tab').classList.add('active');
+            });
+        });
+    </script>
+<?php endif; ?>
 
 <?php elseif ($page === 'compatibility'): ?>
     <div class="dashboard-header">
