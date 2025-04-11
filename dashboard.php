@@ -255,21 +255,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['start_blind_chat'])) 
     }
 }
 
+// Get active chat sessions
+// First check if hidden_chats table exists
+$table_check_sql = "SHOW TABLES LIKE 'hidden_chats'";
+$table_exists = $conn->query($table_check_sql)->num_rows > 0;
+
+// Create the hidden_chats table if it doesn't exist
+if (!$table_exists) {
+    $create_table_sql = "CREATE TABLE IF NOT EXISTS hidden_chats (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
+        session_id INT NOT NULL,
+        hidden_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY user_session (user_id, session_id)
+    )";
+    $conn->query($create_table_sql);
+    $table_exists = true;
+}
+
 // Get active chat sessions (excluding hidden chats)
-$chat_sessions_sql = "SELECT cs.*, 
+if ($table_exists) {
+    $chat_sessions_sql = "SELECT cs.*, 
                       u1.name as user1_name, 
                       u2.name as user2_name,
                       CASE WHEN cs.user1_id = ? THEN u2.name ELSE u1.name END as partner_name,
                       CASE WHEN cs.user1_id = ? THEN u2.id ELSE u1.id END as partner_id,
+                      (SELECT p.profile_pic FROM profiles p WHERE p.user_id = CASE WHEN cs.user1_id = ? THEN u2.id ELSE u1.id END) as profile_pic,
                       (SELECT MAX(created_at) FROM chat_messages WHERE session_id = cs.id) as last_message_time
                       FROM chat_sessions cs
                       JOIN users u1 ON cs.user1_id = u1.id
                       JOIN users u2 ON cs.user2_id = u2.id
                       LEFT JOIN hidden_chats hc ON cs.id = hc.session_id AND hc.user_id = ?
                       WHERE (cs.user1_id = ? OR cs.user2_id = ?) AND hc.id IS NULL
+                      ORDER BY CASE WHEN (SELECT MAX(created_at) FROM chat_messages WHERE session_id = cs.id) IS NULL THEN 0 ELSE 1 END DESC, 
+                               (SELECT MAX(created_at) FROM chat_messages WHERE session_id = cs.id) DESC";
+    $chat_sessions_stmt = $conn->prepare($chat_sessions_sql);
+    $chat_sessions_stmt->bind_param("iiiiii", $user_id, $user_id, $user_id, $user_id, $user_id, $user_id);
+} else {
+    // Fallback query without hidden_chats table (shouldn't be used since we create the table above)
+    $chat_sessions_sql = "SELECT cs.*, 
+                      u1.name as user1_name, 
+                      u2.name as user2_name,
+                      CASE WHEN cs.user1_id = ? THEN u2.name ELSE u1.name END as partner_name,
+                      CASE WHEN cs.user1_id = ? THEN u2.id ELSE u1.id END as partner_id,
+                      (SELECT p.profile_pic FROM profiles p WHERE p.user_id = CASE WHEN cs.user1_id = ? THEN u2.id ELSE u1.id END) as profile_pic,
+                      (SELECT MAX(created_at) FROM chat_messages WHERE session_id = cs.id) as last_message_time
+                      FROM chat_sessions cs
+                      JOIN users u1 ON cs.user1_id = u1.id
+                      JOIN users u2 ON cs.user2_id = u2.id
+                      WHERE (cs.user1_id = ? OR cs.user2_id = ?)
                       ORDER BY last_message_time DESC";
-$chat_sessions_stmt = $conn->prepare($chat_sessions_sql);
-$chat_sessions_stmt->bind_param("iiiii", $user_id, $user_id, $user_id, $user_id, $user_id);
+    $chat_sessions_stmt = $conn->prepare($chat_sessions_sql);
+    $chat_sessions_stmt->bind_param("iiiii", $user_id, $user_id, $user_id, $user_id, $user_id);
+}
+
 $chat_sessions_stmt->execute();
 $chat_sessions_result = $chat_sessions_stmt->get_result();
 $chat_sessions = [];
@@ -466,6 +505,11 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
         
         .btn:hover {
             background-color: #e63e5c;
+        }
+        
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 14px;
         }
         
         .btn-outline {
@@ -748,6 +792,8 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
             border-radius: 10px;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
             transition: transform 0.2s;
+            text-decoration: none;
+            color: inherit;
         }
         
         .chat-item:hover {
@@ -761,6 +807,7 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
             border-radius: 50%;
             overflow: hidden;
             margin-right: 15px;
+            background-color: #f0f0f0;
         }
         
         .chat-avatar img {
@@ -777,6 +824,8 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
             font-size: 16px;
             font-weight: 500;
             margin-bottom: 5px;
+            display: flex;
+            align-items: center;
         }
         
         .chat-last-msg {
@@ -789,23 +838,18 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
             color: #999;
         }
         
-        .compatibility-box {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
         .compatibility-score {
-            width: 60px;
-            height: 60px;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            border-radius: 50%;
-            font-weight: bold;
-            font-size: 18px;
             background: linear-gradient(135deg, var(--primary), var(--accent));
             color: white;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            font-weight: bold;
+            font-size: 20px;
+            margin-right: 10px;
         }
         
         .compatibility-details {
@@ -844,6 +888,11 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
         
         .option input {
             margin-right: 10px;
+        }
+        
+        .lock-icon {
+            margin-left: 5px;
+            color: var(--primary);
         }
         
         /* Media Queries */
@@ -929,10 +978,10 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                             </a>
                         </li>
                         <li>
-                    <a href="?page=payments" class="<?php echo $page === 'payments' ? 'active' : ''; ?>">
-                        <i class="fas fa-credit-card"></i> Pembayaran
-                    </a>
-                </li>
+                            <a href="?page=payments" class="<?php echo $page === 'payments' ? 'active' : ''; ?>">
+                                <i class="fas fa-credit-card"></i> Pembayaran
+                            </a>
+                        </li>
                     </ul>
                 </div>
 
@@ -980,15 +1029,36 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                                             if ($count >= 3) break;
                                             echo '<li style="padding: 10px 0; border-bottom: 1px solid #eee;">';
                                             echo '<i class="fas fa-comments" style="margin-right: 10px; color: var(--primary);"></i>';
-                                            echo 'Chat dengan ' . htmlspecialchars($session['partner_name']);
+                                            
+                                            // Check if blind chat and if permission exists
+                                            $has_permission = false;
+                                            if ($session['is_blind']) {
+                                                $partner_id = $session['partner_id'];
+                                                $permission_sql = "SELECT * FROM profile_view_permissions 
+                                                                WHERE user_id = ? AND target_user_id = ?";
+                                                $permission_stmt = $conn->prepare($permission_sql);
+                                                $permission_stmt->bind_param("ii", $user_id, $partner_id);
+                                                $permission_stmt->execute();
+                                                $permission_result = $permission_stmt->get_result();
+                                                $has_permission = ($permission_result->num_rows > 0);
+                                                
+                                                if (!$has_permission) {
+                                                    echo 'Chat dengan Anonymous User';
+                                                } else {
+                                                    echo 'Chat dengan ' . htmlspecialchars($session['partner_name']);
+                                                }
+                                            } else {
+                                                echo 'Chat dengan ' . htmlspecialchars($session['partner_name']);
+                                            }
+                                            
                                             if ($session['is_blind']) {
                                                 echo ' (Blind Chat)';
                                             }
-                                         echo ' <span style="color: #999; font-size: 12px;">' . 
-                                            (isset($session['last_message_time']) && !empty($session['last_message_time']) 
-                                            ? date('d M Y H:i', strtotime($session['last_message_time'])) 
-                                            : 'Belum ada pesan') . 
-                                            '</span>';
+                                            echo ' <span style="color: #999; font-size: 12px;">' . 
+                                                (isset($session['last_message_time']) && !empty($session['last_message_time']) 
+                                                ? date('d M Y H:i', strtotime($session['last_message_time'])) 
+                                                : 'Belum ada pesan') . 
+                                                '</span>';
                                             echo '</li>';
                                             $count++;
                                         }
@@ -1024,7 +1094,6 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                             </div>
                         </div>
                     
-                   
 <?php elseif ($page === 'profile'): ?>
     <div class="dashboard-header">
         <h2>Profil</h2>
@@ -1306,11 +1375,10 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
             });
         });
     </script>
-<?php endif; ?>
                         
-                    <?php if ($page === 'menfess'): ?>
+                    <?php elseif ($page === 'menfess'): ?>
                         <div class="dashboard-header">
-                            <h2>Anonymous Crush Menfess</h2>
+                            <h2>Crush Menfess</h2>
                             <p>Kirim pesan anonim ke crush Anda. Jika keduanya saling suka, nama akan terungkap!</p>
                         </div>
                         
@@ -1408,401 +1476,174 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                                     <?php foreach ($chat_sessions as $session): ?>
                                         <a href="chat.php?session_id=<?php echo $session['id']; ?>" class="chat-item">
                                             <div class="chat-avatar">
-                                                <img src="/assets/images/user_profile.png" alt="Avatar">
+                                                <?php 
+                                                // Check if blind chat and if user has permission
+                                                $is_blind = $session['is_blind'];
+                                                $partner_id = $session['partner_id'];
+                                                $has_permission = false;
+                                                
+                                                if ($is_blind) {
+                                                    // Check permission
+                                                    $permission_sql = "SELECT * FROM profile_view_permissions 
+                                                                    WHERE user_id = ? AND target_user_id = ?";
+                                                    $permission_stmt = $conn->prepare($permission_sql);
+                                                    $permission_stmt->bind_param("ii", $user_id, $partner_id);
+                                                    $permission_stmt->execute();
+                                                    $permission_result = $permission_stmt->get_result();
+                                                    $has_permission = ($permission_result->num_rows > 0);
+                                                }
+                                                
+                                                if (!$is_blind || $has_permission): 
+                                                ?>
+                                                    <img src="<?php echo !empty($session['profile_pic']) ? htmlspecialchars($session['profile_pic']) : 'assets/images/user_profile.png'; ?>" alt="Avatar">
+                                                <?php else: ?>
+                                                    <img src="assets/images/user_profile.png" alt="Anonymous">
+                                                <?php endif; ?>
                                             </div>
                                             <div class="chat-info">
                                                 <div class="chat-name">
-                                                    <?php echo htmlspecialchars($session['partner_name']); ?>
-                                                    <?php if ($session['is_blind']): ?>
-                                                        <span style="font-size: 12px; color: var(--primary); text-decoration: none;">(Blind Chat)</span>
+                                                    <?php 
+                                                    if ($is_blind && !$has_permission) {
+                                                        echo 'Anonymous User';
+                                                        echo '<i class="fas fa-lock lock-icon" title="Profil Terkunci"></i>';
+                                                    } else {
+                                                        echo htmlspecialchars($session['partner_name']);
+                                                        if ($is_blind && $has_permission) {
+                                                            echo '<i class="fas fa-unlock lock-icon" title="Profil Terbuka"></i>';
+                                                        }
+                                                    }
+                                                    ?>
+                                                    <?php if ($is_blind): ?>
+                                                        <span style="font-size: 12px; color: var(--primary); text-decoration: none; margin-left: 5px;">
+                                                            (Blind Chat)
+                                                        </span>
                                                     <?php endif; ?>
                                                 </div>
-                                                <div class="chat-last-msg" style="text-decoration: none;">Klik untuk melihat percakapan</div>
+                                                <div class="chat-last-msg">Klik untuk melihat percakapan</div>
                                             </div>
                                             <div class="chat-time">
-                                            <?php echo '<div class="chat-time">';
-                                                if (isset($session['last_message_time']) && !empty($session['last_message_time'])) {
-                                                    echo date('d M', strtotime($session['last_message_time'])); 
-                                                } else {
-                                                     echo 'Baru';  // atau 'Belum chat', atau tampilkan ikon
-                                                }
-                                                echo '</div>'; ?>
+                                            <?php 
+                                            if (isset($session['last_message_time']) && !empty($session['last_message_time'])) {
+                                                echo date('d M', strtotime($session['last_message_time'])); 
+                                            } else {
+                                                echo 'Baru';
+                                            }
+                                            ?>
                                             </div>
                                         </a>
                                     <?php endforeach; ?>
                                 <?php endif; ?>
                             </div>
                         </div>
-
-<?php elseif ($page === 'compatibility'): ?>
-    <div class="dashboard-header">
-        <h2>Tes Kecocokan</h2>
-        <p>Ikuti tes untuk menemukan pasangan yang cocok berdasarkan kepribadian, jurusan, dan minat.</p>
-    </div>
-    
-    <?php
-    // Aktifkan error reporting untuk debugging tapi nonaktifkan deprecated warnings
-    error_reporting(E_ALL & ~E_DEPRECATED & ~E_NOTICE); 
-    ini_set('display_errors', 0);
-    
-    // Tambahkan kemampuan untuk reset tes
-    $reset_test = false;
-    if (isset($_GET['reset']) && $_GET['reset'] == 'true') {
-        try {
-            // Hapus hasil tes sebelumnya jika ada
-            $delete_sql = "DELETE FROM compatibility_results WHERE user_id = ?";
-            $delete_stmt = $conn->prepare($delete_sql);
-            if ($delete_stmt) {
-                $delete_stmt->bind_param("i", $user_id);
-                $delete_stmt->execute();
-                $reset_test = true;
-                
-                // Gunakan header PHP untuk redirect yang lebih aman
-                header("Location: dashboard.php?page=compatibility");
-                exit;
-            }
-        } catch (Exception $e) {
-            error_log("Error deleting compatibility results: " . $e->getMessage());
-            // Lanjutkan eksekusi halaman tanpa menghentikan proses
-        }
-    }
-
-    // Check if compatibility test already taken
-    $test_taken = false;
-    $test_results = null;
-    try {
-        $test_taken_sql = "SELECT * FROM compatibility_results WHERE user_id = ?";
-        $test_taken_stmt = $conn->prepare($test_taken_sql);
-        if ($test_taken_stmt) {
-            $test_taken_stmt->bind_param("i", $user_id);
-            $test_taken_stmt->execute();
-            $test_taken_result = $test_taken_stmt->get_result();
-            $test_taken = ($test_taken_result && $test_taken_result->num_rows > 0);
-            if ($test_taken) {
-                $test_results = $test_taken_result->fetch_assoc();
-            }
-        }
-    } catch (Exception $e) {
-        error_log("Error checking compatibility test status: " . $e->getMessage());
-    }
-
-    // Get compatibility questions dengan error handling
-    $questions = [];
-    try {
-        $questions_sql = "SELECT * FROM compatibility_questions";
-        $questions_result = $conn->query($questions_sql);
-        if ($questions_result && $questions_result->num_rows > 0) {
-            while ($row = $questions_result->fetch_assoc()) {
-                $questions[] = $row;
-            }
-        }
-    } catch (Exception $e) {
-        error_log("Error fetching compatibility questions: " . $e->getMessage());
-    }
-
-    // Handle test submission
-    $test_message = '';
-    if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_test'])) {
-        if (empty($questions)) {
-            $test_message = '<div class="alert alert-danger">Tidak dapat mengambil tes: Tidak ada pertanyaan yang tersedia.</div>';
-        } else {
-            try {
-                $answers = [];
-                $personality_score = 0;
-                
-                foreach ($questions as $question) {
-                    $q_id = $question['id'];
-                    if (isset($_POST['q_'.$q_id])) {
-                        $answer = $_POST['q_'.$q_id];
-                        $answers[$q_id] = $answer;
-                        
-                        // Calculate personality score based on answers
-                        $personality_score += intval($answer);
-                    }
-                }
-                
-                // Normalize personality score to a 0-100 scale
-                $max_possible = count($questions) * 5; // assuming 5 is max score per question
-                if ($max_possible > 0) {
-                    $personality_score = ($personality_score / $max_possible) * 100;
-                } else {
-                    $personality_score = 0;
-                }
-                
-                // Get major and interests from profile
-                $major = isset($profile['major']) ? $profile['major'] : '';
-                $interests = isset($profile['interests']) ? $profile['interests'] : '';
-                
-                if ($test_taken) {
-                    // Update test
-                    $update_sql = "UPDATE compatibility_results SET 
-                                  personality_score = ?, 
-                                  major = ?, 
-                                  interests = ?, 
-                                  answers = ?
-                                  WHERE user_id = ?";
-                    $update_stmt = $conn->prepare($update_sql);
-                    if ($update_stmt) {
-                        $answers_json = json_encode($answers);
-                        $update_stmt->bind_param("dsssi", $personality_score, $major, $interests, $answers_json, $user_id);
-                        
-                        if ($update_stmt->execute()) {
-                            $test_message = '<div class="alert alert-success">Compatibility test updated! Finding new matches...</div>';
-                            // Refresh test data
-                            if ($test_taken_stmt) {
-                                $test_taken_stmt->execute();
-                                $test_taken_result = $test_taken_stmt->get_result();
-                                if ($test_taken_result && $test_taken_result->num_rows > 0) {
-                                    $test_results = $test_taken_result->fetch_assoc();
-                                }
-                            }
-                            $test_taken = true;
-                        } else {
-                            $test_message = '<div class="alert alert-danger">Error updating test results: ' . $conn->error . '</div>';
-                        }
-                    } else {
-                        $test_message = '<div class="alert alert-danger">Error preparing update statement</div>';
-                    }
-                } else {
-                    // Save new test
-                    $insert_sql = "INSERT INTO compatibility_results (user_id, personality_score, major, interests, answers) 
-                                  VALUES (?, ?, ?, ?, ?)";
-                    $insert_stmt = $conn->prepare($insert_sql);
-                    if ($insert_stmt) {
-                        $answers_json = json_encode($answers);
-                        $insert_stmt->bind_param("idsss", $user_id, $personality_score, $major, $interests, $answers_json);
-                        
-                        if ($insert_stmt->execute()) {
-                            $test_message = '<div class="alert alert-success">Compatibility test completed! Finding matches...</div>';
-                            $test_taken = true;
-                            // Refresh test data
-                            if ($test_taken_stmt) {
-                                $test_taken_stmt->execute();
-                                $test_taken_result = $test_taken_stmt->get_result();
-                                if ($test_taken_result && $test_taken_result->num_rows > 0) {
-                                    $test_results = $test_taken_result->fetch_assoc();
-                                }
-                            }
-                        } else {
-                            $test_message = '<div class="alert alert-danger">Error saving test results: ' . $conn->error . '</div>';
-                        }
-                    } else {
-                        $test_message = '<div class="alert alert-danger">Error preparing insert statement</div>';
-                    }
-                }
-            } catch (Exception $e) {
-                $test_message = '<div class="alert alert-danger">Error processing test: ' . $e->getMessage() . '</div>';
-                error_log("Error processing compatibility test: " . $e->getMessage());
-            }
-        }
-    }
-
-    // Get compatible matches if test taken
-    $compatible_matches = [];
-    if ($test_taken && isset($test_results['personality_score'])) {
-        try {
-            $personality_score = $test_results['personality_score'];
-            $user_major = isset($test_results['major']) ? $test_results['major'] : '';
-            $user_interests = isset($test_results['interests']) ? $test_results['interests'] : '';
-            
-            // Using a simpler query without string comparison for interests
-            $matches_sql = "SELECT u.id, u.name, p.profile_pic, p.bio, p.major, p.interests,
-                           ABS(IFNULL(cr.personality_score, 0) - ?) as personality_diff,
-                           CASE WHEN cr.major = ? THEN 30 ELSE 0 END as major_match,
-                           (100 - ABS(IFNULL(cr.personality_score, 0) - ?) * 0.3 + 
-                           CASE WHEN cr.major = ? THEN 30 ELSE 0 END) as compatibility_score
-                           FROM compatibility_results cr
-                           JOIN users u ON cr.user_id = u.id
-                           LEFT JOIN profiles p ON u.id = p.user_id
-                           WHERE cr.user_id != ?
-                           ORDER BY compatibility_score DESC
-                           LIMIT 15";
-            
-            $matches_stmt = $conn->prepare($matches_sql);
-            if ($matches_stmt) {
-                $matches_stmt->bind_param("dsdsi", 
-                    $personality_score, 
-                    $user_major, 
-                    $personality_score, 
-                    $user_major, 
-                    $user_id
-                );
-                
-                $matches_stmt->execute();
-                $matches_result = $matches_stmt->get_result();
-                
-                if ($matches_result) {
-                    while ($row = $matches_result->fetch_assoc()) {
-                        // Manually calculate interest match score
-                        $interest_match_score = 0;
-                        if (!empty($row['interests']) && !empty($user_interests)) {
-                            $user_interest_array = array_map('trim', explode(',', strtolower($user_interests)));
-                            $match_interest_array = array_map('trim', explode(',', strtolower($row['interests'])));
-                            
-                            $common_interests = array_intersect($user_interest_array, $match_interest_array);
-                            if (count($common_interests) > 0) {
-                                $interest_match_score = 40;
-                            }
-                        }
-                        
-                        // Adjust compatibility score with interest match
-                        $row['interests_match'] = $interest_match_score;
-                        $row['compatibility_score'] = $row['compatibility_score'] + $interest_match_score;
-                        
-                        $compatible_matches[] = $row;
-                    }
                     
-                    // Sort matches by compatibility score
-                    usort($compatible_matches, function($a, $b) {
-                        return $b['compatibility_score'] <=> $a['compatibility_score'];
-                    });
-                }
-            }
-        } catch (Exception $e) {
-            $test_message = '<div class="alert alert-danger">Error finding matches: ' . $e->getMessage() . '</div>';
-            error_log("Error finding compatibility matches: " . $e->getMessage());
-        }
-    }
-    ?>
-    
-    <?php echo $test_message; ?>
-    
-    <?php if (!$test_taken): ?>
-    <div class="card">
-        <div class="card-header">
-            <h3>Tes Kecocokan</h3>
-        </div>
-        <p>Jawab pertanyaan berikut dengan jujur untuk mendapatkan hasil yang paling akurat.</p>
-        <?php if (empty($questions)): ?>
-            <div class="alert alert-danger">
-                Tidak ada pertanyaan kompatibilitas yang tersedia. Silakan hubungi admin.
-            </div>
-        <?php else: ?>
-        <form id="compatibility-form" method="post">
-            <?php foreach ($questions as $index => $question): ?>
-            <div class="question">
-                <h4><?php echo ($index + 1) . '. ' . htmlspecialchars($question['question_text']); ?></h4>
-                <div class="options">
-                    <?php for ($i = 1; $i <= 5; $i++): ?>
-                    <label class="option">
-                        <input type="radio" name="q_<?php echo $question['id']; ?>" value="<?php echo $i; ?>" required>
-                        <?php echo htmlspecialchars($question['option_' . $i]); ?>
-                    </label>
-                    <?php endfor; ?>
-                </div>
-            </div>
-            <?php endforeach; ?>
-            
-            <button type="submit" name="submit_test" class="btn">Lihat Hasil</button>
-        </form>
-        <?php endif; ?>
-    </div>
-    <?php else: ?>
-    <div class="card">
-        <div class="card-header">
-            <h3>Hasil Tes Kecocokan</h3>
-        </div>
-        <p>Berdasarkan jawaban dan profil Anda, kami telah menemukan orang-orang yang cocok dengan Anda.</p>
-        
-        <div class="score-details" style="display: flex; justify-content: space-between; padding: 10px 15px; background-color: #f8f8f8; border-radius: 5px; margin-bottom: 15px;">
-            <div class="score-item" style="text-align: center;">
-                <div class="score-value" style="font-size: 18px; font-weight: 500; color: var(--primary);"><?php echo isset($test_results['personality_score']) ? round($test_results['personality_score']) : '0'; ?></div>
-                <div class="score-label" style="font-size: 12px; color: #666;">Skor Kepribadian</div>
-            </div>
-            <div class="score-item" style="text-align: center;">
-                <div class="score-value" style="font-size: 18px; font-weight: 500; color: var(--primary);"><?php echo isset($test_results['major']) && !empty($test_results['major']) ? htmlspecialchars($test_results['major']) : 'Tidak ada'; ?></div>
-                <div class="score-label" style="font-size: 12px; color: #666;">Jurusan</div>
-            </div>
-            <div class="score-item" style="text-align: center;">
-                <div class="score-value" style="font-size: 18px; font-weight: 500; color: var(--primary);"><?php echo count($compatible_matches); ?></div>
-                <div class="score-label" style="font-size: 12px; color: #666;">Kecocokan Ditemukan</div>
-            </div>
-        </div>
-        
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-            <h3>Pasangan Yang Cocok</h3>
-            <a href="dashboard.php?page=compatibility&reset=true" class="btn btn-outline">Ambil Tes Ulang</a>
-        </div>
-        
-        <?php if (empty($compatible_matches)): ?>
-        <div style="text-align: center; padding: 40px 0;">
-            <i class="fas fa-search" style="font-size: 50px; color: #ccc; margin-bottom: 20px;"></i>
-            <h3 style="font-size: 20px; margin-bottom: 10px; color: #666;">Belum Ada Kecocokan</h3>
-            <p style="color: #999; margin-bottom: 20px;">Kami belum menemukan kecocokan berdasarkan hasil tes Anda. Silakan coba lagi nanti.</p>
-        </div>
-        <?php else: ?>
-        <div class="matches-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; margin-top: 20px;">
-            <?php foreach ($compatible_matches as $match): ?>
-            <div class="match-card" style="background-color: var(--light); border-radius: 10px; overflow: hidden; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1); transition: transform 0.3s, box-shadow 0.3s;">
-                <div class="match-image" style="height: 200px; overflow: hidden;">
-                    <img src="<?php echo isset($match['profile_pic']) && !empty($match['profile_pic']) ? htmlspecialchars($match['profile_pic']) : '/assets/images/user_profile.png'; ?>" alt="<?php echo htmlspecialchars($match['name']); ?>" style="width: 100%; height: 100%; object-fit: cover;">
-                </div>
-                <div class="match-info" style="padding: 20px;">
-                    <div class="match-name" style="font-size: 18px; font-weight: 500; margin-bottom: 5px; display: flex; justify-content: space-between; align-items: center;">
-                        <span><?php echo htmlspecialchars($match['name']); ?></span>
-                        <span class="match-score" style="display: inline-block; padding: 5px 10px; background-color: var(--primary); color: white; border-radius: 20px; font-size: 14px;"><?php echo isset($match['compatibility_score']) ? round($match['compatibility_score']) : '0'; ?>%</span>
-                    </div>
-                    <div class="match-details" style="color: #666; font-size: 14px; margin-bottom: 10px;">
-                        <?php echo isset($match['major']) && !empty($match['major']) ? htmlspecialchars($match['major']) : 'Jurusan tidak diketahui'; ?>
-                    </div>
-                    
-                    <?php if (isset($match['interests']) && !empty($match['interests'])): ?>
-                    <div class="match-interests" style="display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 15px;">
-                        <?php 
-                        $interests = explode(',', $match['interests']);
-                        foreach (array_slice($interests, 0, 3) as $interest): 
-                        ?>
-                        <span class="interest-tag" style="display: inline-block; padding: 5px 10px; background-color: var(--secondary); color: var(--primary); border-radius: 15px; font-size: 12px;"><?php echo htmlspecialchars(trim($interest)); ?></span>
-                        <?php endforeach; ?>
+                   <?php elseif ($page === 'compatibility'): ?>
+                        <div class="dashboard-header">
+                            <h2>Tes Kecocokan</h2>
+                            <p>Ikuti tes untuk menemukan pasangan yang cocok berdasarkan kepribadian, jurusan, dan minat.</p>
+                        </div>
                         
-                        <?php if (count($interests) > 3): ?>
-                        <span class="interest-tag" style="display: inline-block; padding: 5px 10px; background-color: var(--secondary); color: var(--primary); border-radius: 15px; font-size: 12px;">+<?php echo count($interests) - 3; ?></span>
+                        <?php if (!empty($test_message)): ?>
+                        <div class="alert <?php echo strpos($test_message, 'success') !== false ? 'alert-success' : 'alert-danger'; ?>">
+                            <?php echo $test_message; ?>
+                        </div>
                         <?php endif; ?>
-                    </div>
-                    <?php endif; ?>
-                    
-                    <div class="match-bio" style="color: #666; font-size: 14px; margin-bottom: 15px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;">
-                        <?php echo isset($match['bio']) && !empty($match['bio']) ? nl2br(htmlspecialchars($match['bio'])) : 'Belum ada bio.'; ?>
-                    </div>
-                    
-                    <div class="match-actions" style="display: flex; gap: 10px;">
-                        <a href="view_profile.php?id=<?php echo $match['id']; ?>" class="btn btn-outline">Lihat Profil</a>
-                        <a href="start_chat.php?user_id=<?php echo $match['id']; ?>" class="btn">Chat</a>
-                    </div>
-                </div>
-            </div>
-            <?php endforeach; ?>
-        </div>
-        <?php endif; ?>
-        
-        <!-- Tombol Reset Tes -->
-        <div style="margin-top: 30px; text-align: center;">
-            <a href="dashboard.php?page=compatibility&reset=true" class="btn" style="background-color: #dc3545; color: white;">Reset Tes & Mulai Ulang</a>
-        </div>
-    </div>
-    <?php endif; ?>
-    
-    <script>
-        // Make radio options more user-friendly
-        document.addEventListener('DOMContentLoaded', function() {
-            const options = document.querySelectorAll('.option');
-            if (options.length > 0) {
-                options.forEach(option => {
-                    option.addEventListener('click', function() {
-                        const radio = this.querySelector('input[type="radio"]');
-                        radio.checked = true;
                         
-                        // Update visual selection
-                        const questionDiv = this.closest('.question');
-                        questionDiv.querySelectorAll('.option').forEach(op => {
-                            op.classList.remove('selected');
-                        });
-                        this.classList.add('selected');
-                    });
-                });
-            }
-        });
-    </script>
+                        <?php if (!$test_taken): ?>
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Tes Kecocokan</h3>
+                            </div>
+                            <p>Jawab pertanyaan berikut dengan jujur untuk mendapatkan hasil yang paling akurat.</p>
+                            
+                            <?php if (empty($questions)): ?>
+                                <div class="alert alert-danger">
+                                    Tidak ada pertanyaan kompatibilitas yang tersedia. Silakan hubungi admin.
+                                </div>
+                            <?php else: ?>
+                            <form id="compatibility-form" method="post">
+                                <?php foreach ($questions as $index => $question): ?>
+                                <div class="question">
+                                    <h4><?php echo ($index + 1) . '. ' . htmlspecialchars($question['question_text']); ?></h4>
+                                    <div class="options">
+                                        <?php for ($i = 1; $i <= 5; $i++): ?>
+                                        <label class="option">
+                                            <input type="radio" name="q_<?php echo $question['id']; ?>" value="<?php echo $i; ?>" required>
+                                            <?php echo htmlspecialchars($question['option_' . $i]); ?>
+                                        </label>
+                                        <?php endfor; ?>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                                
+                                <button type="submit" name="submit_test" class="btn">Lihat Hasil</button>
+                            </form>
+                            <?php endif; ?>
+                        </div>
+                        <?php else: ?>
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Hasil Tes Kecocokan</h3>
+                            </div>
+                            <p>Berdasarkan jawaban dan profil Anda, kami telah menemukan orang-orang yang cocok dengan Anda.</p>
+                            
+                            <div class="score-details" style="display: flex; justify-content: space-between; padding: 10px 15px; background-color: #f8f8f8; border-radius: 5px; margin-bottom: 15px;">
+                                <div class="score-item" style="text-align: center;">
+                                    <div class="score-value" style="font-size: 18px; font-weight: 500; color: var(--primary);"><?php echo isset($test_results['personality_score']) ? round($test_results['personality_score']) : '0'; ?></div>
+                                    <div class="score-label" style="font-size: 12px; color: #666;">Skor Kepribadian</div>
+                                </div>
+                                <div class="score-item" style="text-align: center;">
+                                    <div class="score-value" style="font-size: 18px; font-weight: 500; color: var(--primary);"><?php echo isset($test_results['major']) && !empty($test_results['major']) ? htmlspecialchars($test_results['major']) : 'Tidak ada'; ?></div>
+                                    <div class="score-label" style="font-size: 12px; color: #666;">Jurusan</div>
+                                </div>
+                                <div class="score-item" style="text-align: center;">
+                                    <div class="score-value" style="font-size: 18px; font-weight: 500; color: var(--primary);"><?php echo count($compatible_matches); ?></div>
+                                    <div class="score-label" style="font-size: 12px; color: #666;">Kecocokan Ditemukan</div>
+                                </div>
+                            </div>
+                            
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                                <h3>Pasangan Yang Cocok</h3>
+                                <a href="compatibility.php?reset=true" class="btn btn-outline">Ambil Tes Ulang</a>
+                            </div>
+                            
+                            <?php if (empty($compatible_matches)): ?>
+                            <div style="text-align: center; padding: 40px 0;">
+                                <i class="fas fa-search" style="font-size: 50px; color: #ccc; margin-bottom: 20px;"></i>
+                                <h3 style="font-size: 20px; margin-bottom: 10px; color: #666;">Belum Ada Kecocokan</h3>
+                                <p style="color: #999; margin-bottom: 20px;">Kami belum menemukan kecocokan berdasarkan hasil tes Anda. Silakan coba lagi nanti.</p>
+                            </div>
+                            <?php else: ?>
+                            <div class="user-grid">
+                                <?php foreach ($compatible_matches as $match): ?>
+                                <div class="user-card">
+                                    <div class="user-card-img">
+                                        <img src="<?php echo isset($match['profile_pic']) && !empty($match['profile_pic']) ? htmlspecialchars($match['profile_pic']) : 'assets/images/user_profile.png'; ?>" alt="<?php echo htmlspecialchars($match['name']); ?>">
+                                    </div>
+                                    <div class="user-card-info">
+                                        <h3>
+                                            <?php echo htmlspecialchars($match['name']); ?>
+                                            <span style="float: right; background-color: var(--primary); color: white; padding: 3px 8px; border-radius: 15px; font-size: 14px;"><?php echo round($match['compatibility_score']); ?>%</span>
+                                        </h3>
+                                        <p style="margin-bottom: 10px; color: #666; font-size: 14px;"><?php echo isset($match['major']) && !empty($match['major']) ? htmlspecialchars($match['major']) : 'Jurusan tidak diketahui'; ?></p>
+                                        <div class="user-card-bio">
+                                            <?php echo isset($match['bio']) && !empty($match['bio']) ? nl2br(htmlspecialchars(substr($match['bio'], 0, 100) . (strlen($match['bio']) > 100 ? '...' : ''))) : 'Belum ada bio.'; ?>
+                                        </div>
+                                        <div style="display: flex; gap: 10px; margin-top: 15px;">
+                                            <a href="view_profile.php?id=<?php echo $match['id']; ?>" class="btn btn-outline" style="flex: 1;">Profil</a>
+                                            <a href="start_chat.php?user_id=<?php echo $match['id']; ?>" class="btn" style="flex: 1;">Chat</a>
+                                        </div>
+                                    </div>
+                                </div>
+                                <?php endforeach; ?>
+                            </div>
+                            <?php endif; ?>
+                            
+                            <!-- Tombol Reset Tes -->
+                            <div style="margin-top: 30px; text-align: center;">
+                                <a href="compatibility.php?reset=true" class="btn" style="background-color: #dc3545; color: white;">Reset Tes & Mulai Ulang</a>
+                            </div>
+                        </div>
+                        <?php endif; ?>
                     
                     <?php elseif ($page === 'matches'): ?>
                         <div class="dashboard-header">
@@ -1822,7 +1663,7 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                                         <div class="user-card">
                                             <div class="user-card-img">
                                                 <a href="view_profile.php?id=<?php echo $match['id']; ?>" style="display: block; cursor: pointer;">
-                                                    <img src="<?php echo !empty($match['profile_pic']) ? htmlspecialchars($match['profile_pic']) : '/assets/images/user_profile.png'; ?>" alt="<?php echo htmlspecialchars($match['name']); ?>">
+                                                    <img src="<?php echo !empty($match['profile_pic']) ? htmlspecialchars($match['profile_pic']) : 'assets/images/user_profile.png'; ?>" alt="<?php echo htmlspecialchars($match['name']); ?>">
                                                 </a>
                                             </div>
                                             <div class="user-card-info">
@@ -1841,123 +1682,160 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                             </div>
                         </div>
                     <?php elseif ($page === 'payments'): ?>
-    <div class="dashboard-header">
-        <h2>Riwayat Pembayaran</h2>
-        <p>Lihat riwayat pembayaran dan transaksi Anda.</p>
-    </div>
-    
-    <div class="card">
-        <div class="card-header">
-            <h3>Pembayaran Saya</h3>
-        </div>
-        
-        <?php
-        // Get user's payment history
-        $payments_sql = "SELECT prp.*, u.name as target_user_name 
-                        FROM profile_reveal_payments prp
-                        JOIN users u ON prp.target_user_id = u.id
-                        WHERE prp.user_id = ?
-                        ORDER BY prp.created_at DESC";
-        $payments_stmt = $conn->prepare($payments_sql);
-        $payments_stmt->bind_param("i", $user_id);
-        $payments_stmt->execute();
-        $payments_result = $payments_stmt->get_result();
-        $payments = [];
-        while ($row = $payments_result->fetch_assoc()) {
-            $payments[] = $row;
-        }
-        ?>
-        
-        <?php if (empty($payments)): ?>
-            <div class="empty-state" style="text-align: center; padding: 40px 0;">
-                <i class="fas fa-receipt" style="font-size: 50px; color: #ccc; margin-bottom: 20px;"></i>
-                <h3>Belum Ada Pembayaran</h3>
-                <p>Anda belum melakukan pembayaran apapun.</p>
-            </div>
-        <?php else: ?>
-            <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-                <thead>
-                    <tr>
-                        <th style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">Order ID</th>
-                        <th style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">Profil</th>
-                        <th style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">Jumlah</th>
-                        <th style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">Status</th>
-                        <th style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">Tanggal</th>
-                        <th style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">Aksi</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($payments as $payment): ?>
-                    <tr>
-                        <td style="padding: 12px; border-bottom: 1px solid #eee;"><?php echo htmlspecialchars($payment['order_id']); ?></td>
-                        <td style="padding: 12px; border-bottom: 1px solid #eee;"><?php echo htmlspecialchars($payment['target_user_name']); ?></td>
-                        <td style="padding: 12px; border-bottom: 1px solid #eee;">Rp <?php echo number_format($payment['amount'], 0, ',', '.'); ?></td>
-                        <td style="padding: 12px; border-bottom: 1px solid #eee;">
-                            <span style="
-                                display: inline-block;
-                                padding: 4px 8px;
-                                border-radius: 12px;
-                                font-size: 12px;
-                                <?php
-                                switch ($payment['status']) {
-                                    case 'completed':
-                                        echo 'background-color: #d4edda; color: #155724;';
-                                        break;
-                                    case 'pending':
-                                        echo 'background-color: #fff3cd; color: #856404;';
-                                        break;
-                                    case 'failed':
-                                        echo 'background-color: #f8d7da; color: #721c24;';
-                                        break;
-                                    case 'refunded':
-                                        echo 'background-color: #d1ecf1; color: #0c5460;';
-                                        break;
-                                }
-                                ?>
-                            ">
-                                <?php
-                                switch ($payment['status']) {
-                                    case 'completed':
-                                        echo 'Selesai';
-                                        break;
-                                    case 'pending':
-                                        echo 'Menunggu';
-                                        break;
-                                    case 'failed':
-                                        echo 'Gagal';
-                                        break;
-                                    case 'refunded':
-                                        echo 'Dikembalikan';
-                                        break;
-                                }
-                                ?>
-                            </span>
-                        </td>
-                        <td style="padding: 12px; border-bottom: 1px solid #eee;"><?php echo date('d M Y H:i', strtotime($payment['created_at'])); ?></td>
-                        <td style="padding: 12px; border-bottom: 1px solid #eee;">
-                            <?php if ($payment['status'] === 'completed'): ?>
-                                <a href="view_profile.php?id=<?php echo $payment['target_user_id']; ?>" class="btn btn-sm" style="padding: 5px 10px; font-size: 12px;">Lihat Profil</a>
-                            <?php elseif ($payment['status'] === 'pending'): ?>
-                                <a href="payment_process.php?order_id=<?php echo $payment['order_id']; ?>" class="btn btn-sm" style="padding: 5px 10px; font-size: 12px;">Bayar</a>
+                        <div class="dashboard-header">
+                            <h2>Riwayat Pembayaran</h2>
+                            <p>Lihat riwayat pembayaran dan transaksi Anda.</p>
+                        </div>
+                        
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Pembayaran Saya</h3>
+                            </div>
+                            
+                            <?php
+                            // Get user's payment history
+                            $payments_sql = "SELECT prp.*, u.name as target_user_name 
+                                            FROM profile_reveal_payments prp
+                                            JOIN users u ON prp.target_user_id = u.id
+                                            WHERE prp.user_id = ?
+                                            ORDER BY prp.created_at DESC";
+                            $payments_stmt = $conn->prepare($payments_sql);
+                            $payments_stmt->bind_param("i", $user_id);
+                            $payments_stmt->execute();
+                            $payments_result = $payments_stmt->get_result();
+                            $payments = [];
+                            while ($row = $payments_result->fetch_assoc()) {
+                                $payments[] = $row;
+                            }
+                            ?>
+                            
+                            <?php if (empty($payments)): ?>
+                                <div class="empty-state" style="text-align: center; padding: 40px 0;">
+                                    <i class="fas fa-receipt" style="font-size: 50px; color: #ccc; margin-bottom: 20px;"></i>
+                                    <h3>Belum Ada Pembayaran</h3>
+                                    <p>Anda belum melakukan pembayaran apapun.</p>
+                                </div>
+                            <?php else: ?>
+                                <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
+                                    <thead>
+                                        <tr>
+                                            <th style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">Order ID</th>
+                                            <th style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">Profil</th>
+                                            <th style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">Jumlah</th>
+                                            <th style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">Status</th>
+                                            <th style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">Tanggal</th>
+                                            <th style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($payments as $payment): ?>
+                                        <tr>
+                                            <td style="padding: 12px; border-bottom: 1px solid #eee;"><?php echo htmlspecialchars($payment['order_id']); ?></td>
+                                            <td style="padding: 12px; border-bottom: 1px solid #eee;"><?php echo htmlspecialchars($payment['target_user_name']); ?></td>
+                                            <td style="padding: 12px; border-bottom: 1px solid #eee;">Rp <?php echo number_format($payment['amount'], 0, ',', '.'); ?></td>
+                                            <td style="padding: 12px; border-bottom: 1px solid #eee;">
+                                                <span style="
+                                                    display: inline-block;
+                                                    padding: 4px 8px;
+                                                    border-radius: 12px;
+                                                    font-size: 12px;
+                                                    <?php
+                                                    switch ($payment['status']) {
+                                                        case 'completed':
+                                                            echo 'background-color: #d4edda; color: #155724;';
+                                                            break;
+                                                        case 'pending':
+                                                            echo 'background-color: #fff3cd; color: #856404;';
+                                                            break;
+                                                        case 'failed':
+                                                            echo 'background-color: #f8d7da; color: #721c24;';
+                                                            break;
+                                                        case 'refunded':
+                                                            echo 'background-color: #d1ecf1; color: #0c5460;';
+                                                            break;
+                                                    }
+                                                    ?>
+                                                ">
+                                                    <?php
+                                                    switch ($payment['status']) {
+                                                        case 'completed':
+                                                            echo 'Selesai';
+                                                            break;
+                                                        case 'pending':
+                                                            echo 'Menunggu';
+                                                            break;
+                                                        case 'failed':
+                                                            echo 'Gagal';
+                                                            break;
+                                                        case 'refunded':
+                                                            echo 'Dikembalikan';
+                                                            break;
+                                                    }
+                                                    ?>
+                                                </span>
+                                            </td>
+                                            <td style="padding: 12px; border-bottom: 1px solid #eee;"><?php echo date('d M Y H:i', strtotime($payment['created_at'])); ?></td>
+                                            <td style="padding: 12px; border-bottom: 1px solid #eee;">
+                                                <?php if ($payment['status'] === 'completed'): ?>
+                                                    <a href="view_profile.php?id=<?php echo $payment['target_user_id']; ?>" class="btn btn-sm" style="padding: 5px 10px; font-size: 12px;">Lihat Profil</a>
+                                                <?php elseif ($payment['status'] === 'pending'): ?>
+                                                    <a href="payment_process.php?order_id=<?php echo $payment['order_id']; ?>" class="btn btn-sm" style="padding: 5px 10px; font-size: 12px;">Bayar</a>
+                                                <?php endif; ?>
+                                            </td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
                             <?php endif; ?>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-        <?php endif; ?>
-    </div>
-<?php endif; ?>
-
-                    
+                        </div>
+                    <?php else: ?>
+                        <div class="dashboard-header">
+                            <h2><?php echo ucfirst($page); ?></h2>
+                            <p>Halaman ini sedang dalam pengembangan.</p>
+                        </div>
+                        
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>Coming Soon</h3>
+                            </div>
+                            <p>Fitur ini akan segera tersedia. Silakan coba fitur lain yang sudah aktif.</p>
+                            <a href="?page=dashboard" class="btn" style="margin-top: 15px;">Kembali ke Dashboard</a>
+                        </div>
+                    <?php endif; ?>
                 </div>
             </div>
         </div>
     </section>
 
     <script>
-        // JavaScript functionality can be added here
-        // For example, form validations, dynamic content loading, etc.
+        // JavaScript untuk interaktivitas
+        document.addEventListener('DOMContentLoaded', function() {
+            // Highlight active sidebar menu based on page parameter
+            const currentPage = '<?php echo $page; ?>';
+            document.querySelectorAll('.sidebar-menu a').forEach(link => {
+                const linkPage = link.getAttribute('href').split('=')[1];
+                if (linkPage === currentPage) {
+                    link.classList.add('active');
+                }
+            });
+            
+            // Make radio options more user-friendly for compatibility test
+            if (currentPage === 'compatibility') {
+                document.querySelectorAll('.option').forEach(option => {
+                    option.addEventListener('click', function() {
+                        const radio = this.querySelector('input[type="radio"]');
+                        radio.checked = true;
+                        
+                        // Update visual selection
+                        const questionDiv = this.closest('.question');
+                        questionDiv.querySelectorAll('.option').forEach(op => {
+                            op.classList.remove('selected');
+                        });
+                        this.classList.add('selected');
+                    });
+                });
+            }
+        });
     </script>
 </body>
 </html>

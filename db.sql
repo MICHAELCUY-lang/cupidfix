@@ -169,6 +169,16 @@ CREATE TABLE deleted_messages (
     deleted_at INT NOT NULL,
     INDEX (session_id, deleted_at)
 );
+
+CREATE TABLE IF NOT EXISTS hidden_chats (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    session_id INT NOT NULL,
+    hidden_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY user_session (user_id, session_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+);
 -- Script untuk Login dan Register
 
 -- login.php

@@ -66,19 +66,16 @@ $conn->begin_transaction();
 try {
     if ($delete_type == 'for_me') {
         // Create hidden_chats table if it doesn't exist
-        $check_table_sql = "SHOW TABLES LIKE 'hidden_chats'";
-        $table_exists = $conn->query($check_table_sql)->num_rows > 0;
-        
-        if (!$table_exists) {
-            $create_table_sql = "CREATE TABLE hidden_chats (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                user_id INT NOT NULL,
-                session_id INT NOT NULL,
-                hidden_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE KEY user_session (user_id, session_id)
-            )";
-            $conn->query($create_table_sql);
-        }
+        $create_table_sql = "CREATE TABLE IF NOT EXISTS hidden_chats (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            user_id INT NOT NULL,
+            session_id INT NOT NULL,
+            hidden_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY user_session (user_id, session_id),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+            FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+        )";
+        $conn->query($create_table_sql);
         
         // Mark the chat as hidden for this user
         $hide_sql = "INSERT INTO hidden_chats (user_id, session_id) VALUES (?, ?) 
