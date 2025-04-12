@@ -1,9 +1,7 @@
 <?php
 // admin_functions.php
 
-/**
- * Check if user is admin
- */
+
 function requireAdmin() {
     global $conn;
     

@@ -1,6 +1,7 @@
 <?php
 // admin_dashboard.php
 require_once 'config.php';
+require_once 'admin_functions.php';
 
 // Make sure user is logged in and is admin
 requireLogin();

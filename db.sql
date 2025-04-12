@@ -282,9 +282,8 @@ CREATE TABLE IF NOT EXISTS moderation_logs (
     FOREIGN KEY (admin_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (target_user_id) REFERENCES users(id) ON DELETE SET NULL
 );
--- untuk menambahkan admin
-ALTER TABLE users ADD COLUMN is_admin TINYINT(1) NOT NULL DEFAULT 0;
-UPDATE users SET is_admin = 1 WHERE id = [ID_AKUN_ANDA];
+-- menambahkan admin
+UPDATE users SET is_admin = 1 WHERE id = 123; -- ganti 123 dengan id admin yang sesuai
 -- Script untuk Login dan Register
 
 -- login.php
