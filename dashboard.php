@@ -1731,7 +1731,7 @@ tr:hover {
         
         <div class="profile-header">
             <div class="profile-pic">
-                <img src="<?php echo !empty($profile['profile_pic']) ? htmlspecialchars($profile['profile_pic']) : '/api/placeholder/400/400'; ?>" alt="Profile Picture">
+                <img src="<?php echo !empty($profile['profile_pic']) ? htmlspecialchars($profile['profile_pic']) : '../assets/images/user_profile.png'; ?>" alt="Profile Picture">
                 <label for="profile_pic" class="edit-pic-button">
                     <i class="fas fa-camera"></i>
                 </label>
@@ -1992,74 +1992,644 @@ tr:hover {
         });
     </script>
                         
-                    <?php elseif ($page === 'menfess'): ?>
-                        <div class="dashboard-header">
-                            <h2>Crush Menfess</h2>
-                            <p>Kirim pesan anonim ke crush Anda. Jika keduanya saling suka, nama akan terungkap!</p>
+                   <?php elseif ($page === 'menfess'): ?>
+    <div class="dashboard-header">
+        <h2>Crush Menfess</h2>
+        <p>Kirim pesan anonim ke crush Anda. Jika keduanya saling suka, nama akan terungkap!</p>
+    </div>
+    
+    <?php if (!empty($menfess_message)): ?>
+    <div class="alert <?php echo strpos($menfess_message, 'success') !== false ? 'alert-success' : 'alert-danger'; ?>">
+        <?php echo $menfess_message; ?>
+    </div>
+    <?php endif; ?>
+    
+    <div class="card">
+        <div class="card-header">
+            <h3>Kirim Menfess</h3>
+        </div>
+        <div class="card-body">
+            <p class="card-description">
+                Kirim pesan rahasia ke crush-mu tanpa mereka tahu siapa kamu! Jika mereka juga menyukaimu, identitas kalian akan terungkap.
+            </p>
+            
+            <form id="menfessForm" method="post" action="dashboard.php?page=menfess">
+                <div class="form-group">
+                    <label for="crush_search">Cari Crush</label>
+                    <div class="search-container">
+                        <input type="text" id="crush_search" class="form-control" placeholder="Ketik nama crush..." autocomplete="off">
+                        <div class="search-icon">
+                            <i class="fas fa-search"></i>
                         </div>
-                        
-                        <?php if (!empty($menfess_message)): ?>
-                        <div class="alert <?php echo strpos($menfess_message, 'success') !== false ? 'alert-success' : 'alert-danger'; ?>">
-                            <?php echo $menfess_message; ?>
+                        <div id="search-results" class="search-results"></div>
+                    </div>
+                    <input type="hidden" name="crush_id" id="crush_id">
+                </div>
+                
+                <div class="form-group">
+                    <label for="menfess_message">Pesan Menfess</label>
+                    <textarea 
+                        id="menfess_message" 
+                        name="message" 
+                        class="form-control" 
+                        rows="4" 
+                        placeholder="Tulis pesan rahasia untuk crush-mu..."
+                        required></textarea>
+                    <div class="character-counter">
+                        <span id="char-count">0</span>/280
+                    </div>
+                </div>
+                
+                <div class="form-buttons">
+                    <button type="submit" name="send_menfess" class="btn">
+                        <i class="fas fa-paper-plane"></i> Kirim Menfess
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Tampilan tab untuk menfess yang dikirim/diterima -->
+    <div class="card">
+        <div class="card-header">
+            <h3>Menfess Manager</h3>
+        </div>
+        <div class="menfess-list">
+            <div class="menfess-tabs">
+                <div class="menfess-tab active" data-tab="received-menfess">Diterima</div>
+                <div class="menfess-tab" data-tab="sent-menfess">Dikirim</div>
+            </div>
+            
+            <!-- Menfess diterima -->
+            <div id="received-menfess" class="menfess-content active">
+                <?php
+                $received_menfess = array_filter($menfess_messages, function($msg) {
+                    return $msg['type'] === 'received';
+                });
+                
+                if (empty($received_menfess)):
+                ?>
+                <div class="empty-menfess">
+                    <i class="fas fa-inbox"></i>
+                    <p>Belum ada pesan menfess yang diterima</p>
+                </div>
+                <?php else: ?>
+                <?php foreach ($received_menfess as $menfess): 
+                    // Periksa jika pengirim sudah menyukai pesan ini
+                    $sender_liked = false;
+                    if (isset($menfess['sender_id'])) {
+                        $check_sender_like_sql = "SELECT COUNT(*) as count FROM menfess_likes 
+                                               WHERE menfess_id = ? AND user_id = ?";
+                        $check_stmt = $conn->prepare($check_sender_like_sql);
+                        $check_stmt->bind_param("ii", $menfess['id'], $menfess['sender_id']);
+                        $check_stmt->execute();
+                        $like_result = $check_stmt->get_result()->fetch_assoc();
+                        $sender_liked = ($like_result['count'] > 0);
+                    }
+                ?>
+                <div class="menfess-card received">
+                    <div class="menfess-header">
+                        <div class="menfess-to-from">
+                            <?php if (isset($menfess['is_revealed']) && $menfess['is_revealed']): ?>
+                            <i class="fas fa-user"></i> 
+                            <span>Dari: <?php echo htmlspecialchars(getSenderName($conn, $menfess['sender_id'])); ?></span>
+                            <?php else: ?>
+                            <i class="fas fa-mask"></i> 
+                            <span>Penggemar Rahasia</span>
+                            <?php endif; ?>
                         </div>
-                        <?php endif; ?>
-                        
-                        <div class="card">
-                            <div class="card-header">
-                                <h3>Kirim Menfess</h3>
+                        <div class="menfess-time"><?php echo date('d M Y', strtotime($menfess['created_at'])); ?></div>
+                    </div>
+                    <div class="menfess-message">
+                        <?php echo nl2br(htmlspecialchars($menfess['message'])); ?>
+                    </div>
+                    <div class="menfess-actions">
+                        <form method="post">
+                            <input type="hidden" name="menfess_id" value="<?php echo $menfess['id']; ?>">
+                            <button type="submit" name="like_menfess" class="menfess-like <?php echo $menfess['liked'] ? 'liked' : ''; ?>">
+                                <i class="<?php echo $menfess['liked'] ? 'fas' : 'far'; ?> fa-heart"></i>
+                                <span><?php echo $menfess['liked'] ? 'Disukai' : 'Suka'; ?></span>
+                            </button>
+                        </form>
+                        <div class="menfess-status">
+                            <?php if ($sender_liked): ?>
+                            <span><i class="fas fa-heart" style="color: var(--primary);"></i> Pengirim menyukai pesan ini</span>
+                            <?php endif; ?>
+                            
+                            <?php if (isset($menfess['is_revealed']) && $menfess['is_revealed']): ?>
+                            <div class="menfess-match-badge">
+                                <i class="fas fa-check-circle"></i> Match!
                             </div>
-                            <form method="post">
-                                <div class="form-group">
-                                    <label for="crush_id">Pilih Crush</label>
-                                    <select id="crush_id" name="crush_id" required>
-                                        <option value="">-- Pilih Crush --</option>
-                                        <?php foreach ($users as $user_item): ?>
-                                            <option value="<?php echo $user_item['id']; ?>"><?php echo htmlspecialchars($user_item['name']); ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="message">Pesan</label>
-                                    <textarea id="message" name="message" placeholder="Tulis pesan anonim Anda..." required></textarea>
-                                </div>
-                                <button type="submit" name="send_menfess" class="btn">Kirim Menfess</button>
-                            </form>
+                            <?php endif; ?>
                         </div>
-                        
-                        <div class="card">
-                            <div class="card-header">
-                                <h3>Menfess Anda</h3>
-                            </div>
-                            <div class="menfess-list">
-                                <?php if (empty($menfess_messages)): ?>
-                                    <p>Belum ada pesan menfess.</p>
-                                <?php else: ?>
-                                    <?php foreach ($menfess_messages as $message): ?>
-                                        <div class="menfess-card <?php echo $message['type']; ?>">
-                                            <div class="menfess-content">
-                                                <?php echo nl2br(htmlspecialchars($message['message'])); ?>
-                                            </div>
-                                            <div class="menfess-actions">
-                                                <?php if ($message['type'] === 'received'): ?>
-                                                <form method="post" style="display: inline;">
-                                                    <input type="hidden" name="menfess_id" value="<?php echo $message['id']; ?>">
-                                                    <button type="submit" name="like_menfess" class="menfess-like" style="background: none; border: none; cursor: pointer;">
-                                                        <i class="<?php echo $message['liked'] ? 'fas' : 'far'; ?> fa-heart"></i> 
-                                                        <?php echo $message['liked'] ? 'Liked' : 'Like'; ?>
-                                                    </button>
-                                                </form>
-                                                <?php endif; ?>
-                                                <span class="menfess-time">
-                                                    <?php echo date('d M Y H:i', strtotime($message['created_at'])); ?>
-                                                </span>
-                                            </div>
-                                        </div>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            </div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+            
+            <!-- Menfess dikirim -->
+            <div id="sent-menfess" class="menfess-content">
+                <?php
+                $sent_menfess = array_filter($menfess_messages, function($msg) {
+                    return $msg['type'] === 'sent';
+                });
+                
+                if (empty($sent_menfess)):
+                ?>
+                <div class="empty-menfess">
+                    <i class="fas fa-paper-plane"></i>
+                    <p>Belum ada pesan menfess yang dikirim</p>
+                </div>
+                <?php else: ?>
+                <?php foreach ($sent_menfess as $menfess): 
+                    // Periksa jika penerima sudah menyukai pesan ini
+                    $receiver_liked = false;
+                    if (isset($menfess['receiver_id'])) {
+                        $check_receiver_like_sql = "SELECT COUNT(*) as count FROM menfess_likes 
+                                                 WHERE menfess_id = ? AND user_id = ?";
+                        $check_stmt = $conn->prepare($check_receiver_like_sql);
+                        $check_stmt->bind_param("ii", $menfess['id'], $menfess['receiver_id']);
+                        $check_stmt->execute();
+                        $like_result = $check_stmt->get_result()->fetch_assoc();
+                        $receiver_liked = ($like_result['count'] > 0);
+                    }
+                ?>
+                <div class="menfess-card sent">
+                    <div class="menfess-header">
+                        <div class="menfess-to-from">
+                            <i class="fas fa-paper-plane"></i> 
+                            <span>Kepada: <?php echo isset($menfess['receiver_name']) ? htmlspecialchars($menfess['receiver_name']) : 'Unknown'; ?></span>
                         </div>
+                        <div class="menfess-time"><?php echo date('d M Y', strtotime($menfess['created_at'])); ?></div>
+                    </div>
+                    <div class="menfess-message">
+                        <?php echo nl2br(htmlspecialchars($menfess['message'])); ?>
+                    </div>
+                    <div class="menfess-actions">
+                        <div class="menfess-status">
+                            <?php if (isset($menfess['liked']) && $menfess['liked']): ?>
+                            <?php endif; ?>
+                        </div>
+                        <div>
+                            <?php if ($receiver_liked): ?>
+                            <span><i class="fas fa-heart" style="color: var(--primary);"></i> Penerima menyukai pesan Anda</span>
+                            <?php endif; ?>
+                            
+                            <?php if (isset($menfess['is_revealed']) && $menfess['is_revealed']): ?>
+                            <div class="menfess-match-badge">
+                                <i class="fas fa-check-circle"></i> Match!
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+
+<style>
+    .card-description {
+        margin-bottom: 25px;
+        color: #666;
+        font-size: 15px;
+        line-height: 1.6;
+    }
+
+    .search-container {
+        position: relative;
+        margin-bottom: 5px;
+    }
+
+    .search-icon {
+        position: absolute;
+        right: 15px;
+        top: 12px;
+        color: #999;
+        pointer-events: none;
+    }
+
+    .search-results {
+        position: absolute;
+        top: 100%;
+        left: 0;
+        width: 100%;
+        max-height: 200px;
+        overflow-y: auto;
+        background-color: var(--card-bg);
+        border: 1px solid var(--input-border);
+        border-radius: 5px;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        z-index: 1000;
+        display: none;
+    }
+
+    .search-result-item {
+        padding: 12px 15px;
+        border-bottom: 1px solid var(--border-color);
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+    }
+
+    .search-result-item:last-child {
+        border-bottom: none;
+    }
+
+    .search-result-item:hover {
+        background-color: var(--secondary);
+    }
+
+    .search-result-image {
+        width: 35px;
+        height: 35px;
+        border-radius: 50%;
+        overflow: hidden;
+        margin-right: 12px;
+        background-color: #f0f0f0;
+    }
+
+    .search-result-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .search-result-info {
+        flex: 1;
+    }
+
+    .search-result-name {
+        font-weight: 500;
+        margin-bottom: 2px;
+    }
+
+    .search-result-detail {
+        font-size: 12px;
+        color: #666;
+    }
+
+    .character-counter {
+        text-align: right;
+        margin-top: 5px;
+        font-size: 12px;
+        color: #999;
+    }
+
+    /* Gaya untuk kartu menfess yang dikirim/diterima */
+    .menfess-list {
+        margin-top: 20px;
+    }
+
+    .menfess-tabs {
+        display: flex;
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .menfess-tab {
+        flex: 1;
+        text-align: center;
+        padding: 12px;
+        cursor: pointer;
+        transition: all 0.3s;
+        position: relative;
+    }
+
+    .menfess-tab.active {
+        color: var(--primary);
+        font-weight: 500;
+    }
+
+    .menfess-tab.active::after {
+        content: '';
+        position: absolute;
+        bottom: -1px;
+        left: 0;
+        width: 100%;
+        height: 2px;
+        background-color: var(--primary);
+    }
+
+    .menfess-content {
+        display: none;
+    }
+
+    .menfess-content.active {
+        display: block;
+        animation: fadeIn 0.4s ease;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .menfess-card {
+        background-color: var(--card-bg);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.3s, box-shadow 0.3s;
+    }
+
+    .menfess-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+    }
+
+    .menfess-card.sent {
+        background-color: var(--secondary);
+        border-left: 4px solid var(--primary);
+    }
+
+    .menfess-card.received {
+        background-color: #f8f9fa;
+        border-left: 4px solid #adb5bd;
+    }
+
+    [data-theme="dark"] .menfess-card.received {
+        background-color: #252525;
+        border-left-color: #666;
+    }
+
+    .menfess-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        font-size: 14px;
+    }
+
+    .menfess-to-from {
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+    }
+
+    .menfess-to-from i {
+        margin-right: 8px;
+        color: var(--primary);
+    }
+
+    .menfess-time {
+        color: #999;
+        font-size: 12px;
+    }
+
+    .menfess-message {
+        line-height: 1.6;
+        margin-bottom: 15px;
+    }
+
+    .menfess-actions {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 12px;
+        border-top: 1px solid rgba(0,0,0,0.05);
+    }
+
+    .menfess-like {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: #666;
+        transition: all 0.2s;
+        font-size: 14px;
+    }
+
+    .menfess-like:hover {
+        color: var(--primary);
+    }
+
+    .menfess-like.liked {
+        color: var(--primary);
+    }
+
+    .menfess-like.liked i {
+        transform: scale(1.2);
+    }
+
+    .menfess-status {
+        font-size: 13px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .menfess-match-badge {
+        background-color: var(--primary);
+        color: white;
+        font-size: 12px;
+        padding: 4px 8px;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .empty-menfess {
+        text-align: center;
+        padding: 30px 0;
+        color: #999;
+    }
+
+    .empty-menfess i {
+        font-size: 40px;
+        margin-bottom: 15px;
+        opacity: 0.3;
+    }
+
+    .form-buttons {
+        display: flex;
+        justify-content: flex-end;
+    }
+    
+    /* Responsiveness */
+    @media (max-width: 767px) {
+        .menfess-actions {
+            flex-direction: column;
+            gap: 10px;
+            align-items: flex-start;
+        }
+        
+        .menfess-match-badge {
+            align-self: flex-end;
+        }
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const crushSearch = document.getElementById('crush_search');
+    const crushId = document.getElementById('crush_id');
+    const searchResults = document.getElementById('search-results');
+    const messageField = document.getElementById('menfess_message');
+    const charCount = document.getElementById('char-count');
+    
+    // Menampilkan hitungan karakter
+    if (messageField) {
+        messageField.addEventListener('input', function() {
+            const count = this.value.length;
+            charCount.textContent = count;
+            
+            // Membatasi jumlah karakter
+            if (count > 280) {
+                this.value = this.value.substring(0, 280);
+                charCount.textContent = 280;
+            }
+            
+            // Mengubah warna counter saat mendekati limit
+            if (count > 230) {
+                charCount.style.color = '#e63e5c';
+            } else {
+                charCount.style.color = '#999';
+            }
+        });
+    }
+    
+    // Menangani pencarian crush
+    if (crushSearch) {
+        let searchTimeout;
+        crushSearch.addEventListener('input', function() {
+            const query = this.value.trim();
+            
+            // Clear previous timeout
+            clearTimeout(searchTimeout);
+            
+            // Jika input kosong, sembunyikan hasil
+            if (query === '') {
+                searchResults.style.display = 'none';
+                crushId.value = '';
+                return;
+            }
+            
+            // Set timeout untuk pencarian (throttling)
+            searchTimeout = setTimeout(() => {
+                // Lakukan pencarian
+                fetchUsers(query);
+            }, 300);
+        });
+    }
+    
+    // Menutup hasil pencarian saat klik di luar
+    document.addEventListener('click', function(e) {
+        if (searchResults && !searchResults.contains(e.target) && e.target !== crushSearch) {
+            searchResults.style.display = 'none';
+        }
+    });
+    
+    // Fungsi untuk mengambil data pengguna
+    function fetchUsers(query) {
+        // AJAX call ke server untuk mencari user
+        fetch(`search_users.php?q=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(data => {
+                displayResults(data);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                // Fallback dengan data dummy jika API belum tersedia
+                const users = <?php echo json_encode($users); ?>;
+                const filtered = users.filter(user => 
+                    user.name.toLowerCase().includes(query.toLowerCase())
+                );
+                displayResults(filtered);
+            });
+    }
+    
+    // Fungsi untuk menampilkan hasil pencarian
+    function displayResults(users) {
+        // Bersihkan hasil sebelumnya
+        if (!searchResults) return;
+        searchResults.innerHTML = '';
+        
+        if (users.length === 0) {
+            searchResults.innerHTML = '<div class="search-result-item">Tidak ada hasil ditemukan</div>';
+            searchResults.style.display = 'block';
+            return;
+        }
+        
+        // Tambahkan setiap hasil
+        users.forEach(user => {
+            const item = document.createElement('div');
+            item.className = 'search-result-item';
+            const profilePic = user.profile_pic || '/api/placeholder/35/35';
+            item.innerHTML = `
+                <div class="search-result-image">
+                    <img src="${profilePic}" alt="${user.name}">
+                </div>
+                <div class="search-result-info">
+                    <div class="search-result-name">${user.name}</div>
+                    <div class="search-result-detail">${user.major || ''}</div>
+                </div>
+            `;
+            
+            // Saat item diklik
+            item.addEventListener('click', function() {
+                crushSearch.value = user.name;
+                crushId.value = user.id;
+                searchResults.style.display = 'none';
+            });
+            
+            searchResults.appendChild(item);
+        });
+        
+        // Tampilkan hasil
+        searchResults.style.display = 'block';
+    }
+    
+    // Tab switching untuk menfess
+    const tabs = document.querySelectorAll('.menfess-tab');
+    if (tabs.length > 0) {
+        tabs.forEach(tab => {
+            tab.addEventListener('click', function() {
+                // Update active tab
+                tabs.forEach(t => t.classList.remove('active'));
+                this.classList.add('active');
+                
+                // Show corresponding content
+                const target = this.getAttribute('data-tab');
+                document.querySelectorAll('.menfess-content').forEach(content => {
+                    content.classList.remove('active');
+                });
+                document.getElementById(target).classList.add('active');
+            });
+        });
+    }
+    
+    // Form validation
+    const menfessForm = document.getElementById('menfessForm');
+    if (menfessForm) {
+        menfessForm.addEventListener('submit', function(e) {
+            if (!crushId.value) {
+                e.preventDefault();
+                alert('Silakan pilih crush terlebih dahulu');
+                return false;
+            }
+            
+            if (!messageField.value.trim()) {
+                e.preventDefault();
+                alert('Pesan tidak boleh kosong');
+                return false;
+            }
+        });
+    }
+});
+</script>
+<?php endif; ?>
                     
-                    <?php elseif ($page === 'chat'): ?>
+                    <?php if ($page === 'chat'): ?>
                         <div class="dashboard-header">
                             <h2>Chat</h2>
                             <p>Chat dengan mahasiswa lain atau mulai blind chat.</p>
