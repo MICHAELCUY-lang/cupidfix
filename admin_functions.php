@@ -24,6 +24,38 @@ function requireAdmin() {
 }
 
 /**
+ * Update user's last activity timestamp
+ */
+function updateUserActivity($userId, $conn) {
+    $sql = "UPDATE users SET last_activity = NOW() WHERE id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $userId);
+    $stmt->execute();
+}
+
+/**
+ * Get users who are currently online (active in the last X minutes)
+ */
+function getOnlineUsers($conn, $minutes = 5) {
+    $sql = "SELECT id, name, email, last_activity, 
+            (SELECT profile_pic FROM profiles WHERE user_id = users.id) as profile_pic
+            FROM users 
+            WHERE last_activity >= DATE_SUB(NOW(), INTERVAL ? MINUTE)
+            ORDER BY last_activity DESC";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $minutes);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    $onlineUsers = [];
+    while ($row = $result->fetch_assoc()) {
+        $onlineUsers[] = $row;
+    }
+    
+    return $onlineUsers;
+}
+
+/**
  * Get dashboard statistics
  */
 function getAdminDashboardStats($conn) {
@@ -33,7 +65,7 @@ function getAdminDashboardStats($conn) {
     $total_users = $result->fetch_assoc()['count'];
     
     // Active users (users active in the last 30 days)
-    $active_sql = "SELECT COUNT(DISTINCT user_id) as count FROM chat_messages 
+    $active_sql = "SELECT COUNT(DISTINCT sender_id) as count FROM chat_messages 
                   WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)";
     $result = $conn->query($active_sql);
     $active_users = $result->fetch_assoc()['count'];
@@ -52,9 +84,9 @@ function getAdminDashboardStats($conn) {
     
     // Recent activity
     $activity_sql = "SELECT a.*, u.name as user_name FROM (
-                    SELECT user_id, 'Created Account' as action, created_at FROM users
+                    SELECT id AS user_id, 'Created Account' as action, created_at FROM users
                     UNION ALL
-                    SELECT user_id, 'Sent Message' as action, created_at FROM chat_messages
+                    SELECT sender_id AS user_id, 'Sent Message' as action, created_at FROM chat_messages
                     UNION ALL
                     SELECT user_id, 'Made Payment' as action, created_at FROM profile_reveal_payments
                     ) as a

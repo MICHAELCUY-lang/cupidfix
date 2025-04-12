@@ -138,6 +138,7 @@ while ($row = $verifications_result->fetch_assoc()) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Moderation Tools - Cupid Admin</title>
+    <link rel="stylesheet" href="css/admin_styles.css">
     <?php include 'admin_header_includes.php'; ?>
 </head>
 <body>

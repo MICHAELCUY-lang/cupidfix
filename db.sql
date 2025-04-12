@@ -284,6 +284,10 @@ CREATE TABLE IF NOT EXISTS moderation_logs (
 );
 -- menambahkan admin
 UPDATE users SET is_admin = 1 WHERE id = 123; -- ganti 123 dengan id admin yang sesuai
+
+ALTER TABLE users 
+ADD COLUMN last_activity TIMESTAMP NULL,
+ADD INDEX (last_activity);
 -- Script untuk Login dan Register
 
 -- login.php

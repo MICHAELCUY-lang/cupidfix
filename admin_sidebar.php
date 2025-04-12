@@ -10,6 +10,11 @@
                 <i class="fas fa-users"></i> User Management
             </a>
         </li>
+              <li>
+          <a href="admin_online_users.php" class="<?php echo basename($_SERVER['PHP_SELF']) == 'admin_online_users.php' ? 'active' : ''; ?>">
+              <i class="fas fa-user-clock"></i> Online Users
+          </a>
+      </li>
         <li>
             <a href="admin_payments.php" class="<?php echo basename($_SERVER['PHP_SELF']) == 'admin_payments.php' ? 'active' : ''; ?>">
                 <i class="fas fa-credit-card"></i> Payments
