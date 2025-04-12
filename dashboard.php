@@ -2564,7 +2564,7 @@ document.addEventListener('DOMContentLoaded', function() {
         users.forEach(user => {
             const item = document.createElement('div');
             item.className = 'search-result-item';
-            const profilePic = user.profile_pic || '/api/placeholder/35/35';
+            const profilePic = user.profile_pic || '../assets/images/user_profile.png';
             item.innerHTML = `
                 <div class="search-result-image">
                     <img src="${profilePic}" alt="${user.name}">
@@ -2831,168 +2831,543 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                         <?php endif; ?>
                     
-                    <?php elseif ($page === 'matches'): ?>
-                        <div class="dashboard-header">
-                            <h2>Pasangan</h2>
-                            <p>Lihat orang-orang yang cocok dengan Anda berdasarkan menfess mutual.</p>
+                   <?php elseif ($page === 'matches'): ?>
+    <div class="dashboard-header">
+        <h2>Pasangan</h2>
+        <p>Lihat orang-orang yang cocok dengan Anda berdasarkan menfess mutual.</p>
+    </div>
+    
+    <div class="card">
+        <div class="card-header">
+            <h3><i class="fas fa-heart"></i> Pasangan</h3>
+        </div>
+        <div class="matches-container">
+            <p>Orang-orang yang saling tertarik dengan Anda</p>
+            
+            <div class="matches-grid">
+                <?php if (empty($matches)): ?>
+                    <div class="empty-matches">
+                        <div class="empty-icon">
+                            <i class="fas fa-heart-broken"></i>
                         </div>
-                        
-                        <div class="card">
-                            <div class="card-header">
-                                <h3>Mutual Menfess</h3>
-                            </div>
-                            <div class="user-grid">
-                                <?php if (empty($matches)): ?>
-                                    <p>Belum ada mutual menfess. Kirim menfess dan like untuk menemukan pasangan!</p>
-                                <?php else: ?>
-                                    <?php foreach ($matches as $match): ?>
-                                        <div class="user-card">
-                                            <div class="user-card-img">
-                                                <a href="view_profile.php?id=<?php echo $match['id']; ?>" style="display: block; cursor: pointer;">
-                                                    <img src="<?php echo !empty($match['profile_pic']) ? htmlspecialchars($match['profile_pic']) : 'assets/images/user_profile.png'; ?>" alt="<?php echo htmlspecialchars($match['name']); ?>">
-                                                </a>
-                                            </div>
-                                            <div class="user-card-info">
-                                                <h3><?php echo htmlspecialchars($match['name']); ?></h3>
-                                                <div class="user-card-bio">
-                                                    <?php echo nl2br(htmlspecialchars(substr($match['bio'], 0, 100) . (strlen($match['bio']) > 100 ? '...' : ''))); ?>
-                                                </div>
-                                                <div style="display: flex; gap: 10px; margin-top: 15px;">
-                                                    <a href="view_profile.php?id=<?php echo $match['id']; ?>" class="btn btn-outline" style="flex: 1;">Profil</a>
-                                                    <a href="start_chat.php?user_id=<?php echo $match['id']; ?>" class="btn" style="flex: 1;">Chat</a>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            </div>
-                        </div>
-                    <?php elseif ($page === 'payments'): ?>
-                        <div class="dashboard-header">
-                            <h2>Riwayat Pembayaran</h2>
-                            <p>Lihat riwayat pembayaran dan transaksi Anda.</p>
-                        </div>
-                        
-                        <div class="card">
-                            <div class="card-header">
-                                <h3>Pembayaran Saya</h3>
-                            </div>
-                            
-                            <?php
-                            // Get user's payment history
-                            $payments_sql = "SELECT prp.*, u.name as target_user_name 
-                                            FROM profile_reveal_payments prp
-                                            JOIN users u ON prp.target_user_id = u.id
-                                            WHERE prp.user_id = ?
-                                            ORDER BY prp.created_at DESC";
-                            $payments_stmt = $conn->prepare($payments_sql);
-                            $payments_stmt->bind_param("i", $user_id);
-                            $payments_stmt->execute();
-                            $payments_result = $payments_stmt->get_result();
-                            $payments = [];
-                            while ($row = $payments_result->fetch_assoc()) {
-                                $payments[] = $row;
-                            }
-                            ?>
-                            
-                            <?php if (empty($payments)): ?>
-                                <div class="empty-state" style="text-align: center; padding: 40px 0;">
-                                    <i class="fas fa-receipt" style="font-size: 50px; color: #ccc; margin-bottom: 20px;"></i>
-                                    <h3>Belum Ada Pembayaran</h3>
-                                    <p>Anda belum melakukan pembayaran apapun.</p>
+                        <h3>Belum Ada Pasangan</h3>
+                        <p>Kirim menfess ke crush kamu dan tunggu balasannya untuk mulai membuat koneksi!</p>
+                        <a href="?page=menfess" class="btn">Kirim Menfess</a>
+                    </div>
+                <?php else: ?>
+                    <?php foreach ($matches as $match): ?>
+                        <div class="match-card">
+                            <div class="match-image">
+                                <img src="<?php echo !empty($match['profile_pic']) ? htmlspecialchars($match['profile_pic']) : 'assets/images/user_profile.png'; ?>" alt="<?php echo htmlspecialchars($match['name']); ?>">
+                                <div class="match-badge">
+                                    <i class="fas fa-heart"></i> Match!
                                 </div>
-                            <?php else: ?>
-                                <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
-                                    <thead>
-                                        <tr>
-                                            <th style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">Order ID</th>
-                                            <th style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">Profil</th>
-                                            <th style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">Jumlah</th>
-                                            <th style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">Status</th>
-                                            <th style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">Tanggal</th>
-                                            <th style="text-align: left; padding: 12px; border-bottom: 1px solid #eee;">Aksi</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php foreach ($payments as $payment): ?>
-                                        <tr>
-                                            <td style="padding: 12px; border-bottom: 1px solid #eee;"><?php echo htmlspecialchars($payment['order_id']); ?></td>
-                                            <td style="padding: 12px; border-bottom: 1px solid #eee;"><?php echo htmlspecialchars($payment['target_user_name']); ?></td>
-                                            <td style="padding: 12px; border-bottom: 1px solid #eee;">Rp <?php echo number_format($payment['amount'], 0, ',', '.'); ?></td>
-                                            <td style="padding: 12px; border-bottom: 1px solid #eee;">
-                                                <span style="
-                                                    display: inline-block;
-                                                    padding: 4px 8px;
-                                                    border-radius: 12px;
-                                                    font-size: 12px;
-                                                    <?php
-                                                    switch ($payment['status']) {
-                                                        case 'completed':
-                                                            echo 'background-color: #d4edda; color: #155724;';
-                                                            break;
-                                                        case 'pending':
-                                                            echo 'background-color: #fff3cd; color: #856404;';
-                                                            break;
-                                                        case 'failed':
-                                                            echo 'background-color: #f8d7da; color: #721c24;';
-                                                            break;
-                                                        case 'refunded':
-                                                            echo 'background-color: #d1ecf1; color: #0c5460;';
-                                                            break;
-                                                    }
-                                                    ?>
-                                                ">
-                                                    <?php
-                                                    switch ($payment['status']) {
-                                                        case 'completed':
-                                                            echo 'Selesai';
-                                                            break;
-                                                        case 'pending':
-                                                            echo 'Menunggu';
-                                                            break;
-                                                        case 'failed':
-                                                            echo 'Gagal';
-                                                            break;
-                                                        case 'refunded':
-                                                            echo 'Dikembalikan';
-                                                            break;
-                                                    }
-                                                    ?>
-                                                </span>
-                                            </td>
-                                            <td style="padding: 12px; border-bottom: 1px solid #eee;"><?php echo date('d M Y H:i', strtotime($payment['created_at'])); ?></td>
-                                            <td style="padding: 12px; border-bottom: 1px solid #eee;">
-                                                <?php if ($payment['status'] === 'completed'): ?>
-                                                    <a href="view_profile.php?id=<?php echo $payment['target_user_id']; ?>" class="btn btn-sm" style="padding: 5px 10px; font-size: 12px;">Lihat Profil</a>
-                                                <?php elseif ($payment['status'] === 'pending'): ?>
-                                                    <a href="payment_process.php?order_id=<?php echo $payment['order_id']; ?>" class="btn btn-sm" style="padding: 5px 10px; font-size: 12px;">Bayar</a>
-                                                <?php endif; ?>
-                                            </td>
-                                        </tr>
-                                        <?php endforeach; ?>
-                                    </tbody>
-                                </table>
-                            <?php endif; ?>
-                        </div>
-                    <?php else: ?>
-                        <div class="dashboard-header">
-                            <h2><?php echo ucfirst($page); ?></h2>
-                            <p>Halaman ini sedang dalam pengembangan.</p>
-                        </div>
-                        
-                        <div class="card">
-                            <div class="card-header">
-                                <h3>Coming Soon</h3>
                             </div>
-                            <p>Fitur ini akan segera tersedia. Silakan coba fitur lain yang sudah aktif.</p>
-                            <a href="?page=dashboard" class="btn" style="margin-top: 15px;">Kembali ke Dashboard</a>
+                            <div class="match-info">
+                                <div class="match-header">
+                                    <h3><?php echo htmlspecialchars($match['name']); ?></h3>
+                                </div>
+                                <div class="match-bio">
+                                    <?php echo isset($match['bio']) ? nl2br(htmlspecialchars(substr($match['bio'], 0, 100) . (strlen($match['bio']) > 100 ? '...' : ''))) : 'Belum ada bio.'; ?>
+                                </div>
+                                <div class="match-actions">
+                                    <a href="view_profile.php?id=<?php echo $match['id']; ?>" class="btn btn-outline">
+                                        <i class="fas fa-user"></i> Lihat Profil
+                                    </a>
+                                    <a href="start_chat.php?user_id=<?php echo $match['id']; ?>" class="btn">
+                                        <i class="fas fa-comments"></i> Chat
+                                    </a>
+                                </div>
+                            </div>
                         </div>
-                    <?php endif; ?>
-                </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
             </div>
         </div>
-    </section>
+    </div>
 
+    <style>
+    /* Matches styling */
+    .matches-container {
+        margin-bottom: 30px;
+    }
+    
+    .matches-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 20px;
+        margin-top: 20px;
+    }
+    
+    .match-card {
+        background-color: var(--card-bg);
+        border-radius: 10px;
+        overflow: hidden;
+        box-shadow: var(--card-shadow);
+        transition: transform 0.3s, box-shadow 0.3s;
+    }
+    
+    .match-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
+    }
+    
+    .match-image {
+        height: 200px;
+        overflow: hidden;
+        position: relative;
+    }
+    
+    .match-image img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .match-badge {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background-color: var(--primary);
+        color: white;
+        font-size: 12px;
+        padding: 4px 8px;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+    }
+    
+    .match-info {
+        padding: 20px;
+    }
+    
+    .match-header {
+        margin-bottom: 10px;
+    }
+    
+    .match-header h3 {
+        font-size: 18px;
+        font-weight: 500;
+        color: var(--text-color);
+    }
+    
+    .match-bio {
+        font-size: 14px;
+        color: #666;
+        margin-bottom: 15px;
+        display: -webkit-box;
+        -webkit-line-clamp: 3;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        height: 60px;
+    }
+    
+    .match-actions {
+        display: flex;
+        gap: 10px;
+    }
+    
+    .empty-matches {
+        text-align: center;
+        padding: 40px 0;
+    }
+    
+    .empty-icon {
+        font-size: 50px;
+        color: var(--secondary);
+        margin-bottom: 20px;
+    }
+    
+    .empty-matches h3 {
+        font-size: 20px;
+        margin-bottom: 10px;
+        color: var(--text-color);
+    }
+    
+    .empty-matches p {
+        color: #666;
+        margin-bottom: 20px;
+    }
+    
+    @media (max-width: 767px) {
+        .match-actions {
+            flex-direction: column;
+        }
+    }
+    </style>
+<?php endif; ?>
+                            
+                            <?php if ($page === 'payments'): ?>
+    <div class="dashboard-header">
+        <h2>Riwayat Pembayaran</h2>
+        <p>Lihat riwayat pembayaran dan transaksi profile reveal Anda.</p>
+    </div>
+    
+    <div class="card">
+        <?php
+        // Get user's payment history
+        $payments_sql = "SELECT prp.*, u.name as target_user_name, 
+                        p.profile_pic as target_profile_pic
+                        FROM profile_reveal_payments prp
+                        JOIN users u ON prp.target_user_id = u.id
+                        LEFT JOIN profiles p ON u.id = p.user_id
+                        WHERE prp.user_id = ?
+                        ORDER BY prp.created_at DESC";
+        $payments_stmt = $conn->prepare($payments_sql);
+        $payments_stmt->bind_param("i", $user_id);
+        $payments_stmt->execute();
+        $payments_result = $payments_stmt->get_result();
+        $payments = [];
+        while ($row = $payments_result->fetch_assoc()) {
+            $payments[] = $row;
+        }
+        ?>
+        
+        <div class="payments-container">
+            <div class="payments-header">
+                <h2><i class="fas fa-credit-card"></i> Pembayaran Saya</h2>
+                <p>Riwayat pembayaran untuk melihat profil pengguna</p>
+            </div>
+            
+            <?php if (empty($payments)): ?>
+                <div class="empty-payments">
+                    <div class="empty-icon">
+                        <i class="fas fa-receipt"></i>
+                    </div>
+                    <h3>Belum Ada Pembayaran</h3>
+                    <p>Anda belum melakukan pembayaran apapun untuk melihat profil pengguna lain.</p>
+                    <p class="empty-tip">Tip: Coba mulai <a href="?page=chat">Blind Chat</a> untuk menemukan pasangan baru!</p>
+                </div>
+            <?php else: ?>
+                <div class="payments-list">
+                    <?php foreach ($payments as $payment): ?>
+                        <div class="payment-card">
+                            <div class="payment-user">
+                                <div class="payment-avatar">
+                                    <img src="<?php echo !empty($payment['target_profile_pic']) ? htmlspecialchars($payment['target_profile_pic']) : 'assets/images/user_profile.png'; ?>" 
+                                         alt="<?php echo htmlspecialchars($payment['target_user_name']); ?>">
+                                </div>
+                                <div class="payment-user-info">
+                                    <h3><?php echo htmlspecialchars($payment['target_user_name']); ?></h3>
+                                    <div class="payment-date">
+                                        <i class="fas fa-calendar-alt"></i> <?php echo date('d M Y', strtotime($payment['created_at'])); ?>
+                                    </div>
+                                </div>
+                                <div class="payment-status-badge <?php echo $payment['status']; ?>">
+                                    <?php
+                                    switch ($payment['status']) {
+                                        case 'completed':
+                                            echo '<i class="fas fa-check-circle"></i> Selesai';
+                                            break;
+                                        case 'pending':
+                                            echo '<i class="fas fa-clock"></i> Menunggu';
+                                            break;
+                                        case 'failed':
+                                            echo '<i class="fas fa-times-circle"></i> Gagal';
+                                            break;
+                                        case 'refunded':
+                                            echo '<i class="fas fa-undo"></i> Dikembalikan';
+                                            break;
+                                    }
+                                    ?>
+                                </div>
+                            </div>
+                            <div class="payment-details">
+                                <div class="payment-info">
+                                    <div class="payment-info-item">
+                                        <span class="label">Order ID:</span>
+                                        <span class="value"><?php echo htmlspecialchars($payment['order_id']); ?></span>
+                                    </div>
+                                    <div class="payment-info-item">
+                                        <span class="label">Jumlah:</span>
+                                        <span class="value price">Rp <?php echo number_format($payment['amount'], 0, ',', '.'); ?></span>
+                                    </div>
+                                    <div class="payment-info-item">
+                                        <span class="label">Waktu:</span>
+                                        <span class="value"><?php echo date('H:i', strtotime($payment['created_at'])); ?> WIB</span>
+                                    </div>
+                                    <?php if ($payment['status'] === 'completed' && !empty($payment['paid_at'])): ?>
+                                    <div class="payment-info-item">
+                                        <span class="label">Dibayar pada:</span>
+                                        <span class="value"><?php echo date('d M Y H:i', strtotime($payment['paid_at'])); ?> WIB</span>
+                                    </div>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="payment-actions">
+                                    <?php if ($payment['status'] === 'completed'): ?>
+                                        <a href="view_profile.php?id=<?php echo $payment['target_user_id']; ?>" class="btn">
+                                            <i class="fas fa-eye"></i> Lihat Profil
+                                        </a>
+                                    <?php elseif ($payment['status'] === 'pending'): ?>
+                                        <a href="payment_process.php?order_id=<?php echo $payment['order_id']; ?>" class="btn">
+                                            <i class="fas fa-credit-card"></i> Bayar Sekarang
+                                        </a>
+                                        <a href="#" class="btn btn-outline cancel-payment" data-order-id="<?php echo $payment['order_id']; ?>">
+                                            <i class="fas fa-times"></i> Batalkan
+                                        </a>
+                                    <?php elseif ($payment['status'] === 'failed'): ?>
+                                        <a href="payment_process.php?order_id=<?php echo $payment['order_id']; ?>" class="btn">
+                                            <i class="fas fa-redo"></i> Coba Lagi
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+    
+    <style>
+    /* Payment Section Styling */
+    .payments-container {
+        margin-bottom: 30px;
+    }
+    
+    .payments-header {
+        margin-bottom: 25px;
+        text-align: center;
+    }
+    
+    .payments-header h2 {
+        font-size: 24px;
+        margin-bottom: 10px;
+        color: var(--primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+    }
+    
+    .payments-header p {
+        color: #666;
+        font-size: 16px;
+    }
+    
+    .payments-list {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .payment-card {
+        background-color: var(--card-bg);
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: var(--card-shadow);
+        border: 1px solid var(--border-color);
+        transition: transform 0.3s, box-shadow 0.3s;
+    }
+    
+    .payment-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+    }
+    
+    .payment-user {
+        display: flex;
+        align-items: center;
+        padding: 15px 20px;
+        border-bottom: 1px solid var(--border-color);
+        position: relative;
+    }
+    
+    .payment-avatar {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        overflow: hidden;
+        margin-right: 15px;
+    }
+    
+    .payment-avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .payment-user-info {
+        flex: 1;
+    }
+    
+    .payment-user-info h3 {
+        font-size: 18px;
+        margin-bottom: 5px;
+        color: var(--text-color);
+    }
+    
+    .payment-date {
+        font-size: 13px;
+        color: #888;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+    
+    .payment-status-badge {
+        padding: 6px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 500;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+    
+    .payment-status-badge.completed {
+        background-color: #d4edda;
+        color: #155724;
+    }
+    
+    .payment-status-badge.pending {
+        background-color: #fff3cd;
+        color: #856404;
+    }
+    
+    .payment-status-badge.failed {
+        background-color: #f8d7da;
+        color: #721c24;
+    }
+    
+    .payment-status-badge.refunded {
+        background-color: #d1ecf1;
+        color: #0c5460;
+    }
+    
+    .payment-details {
+        padding: 15px 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+    
+    .payment-info {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 10px 20px;
+        flex: 1;
+    }
+    
+    .payment-info-item {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .payment-info-item .label {
+        font-size: 12px;
+        color: #888;
+        margin-bottom: 5px;
+    }
+    
+    .payment-info-item .value {
+        font-size: 14px;
+        font-weight: 500;
+        color: var(--text-color);
+    }
+    
+    .payment-info-item .price {
+        color: var(--primary);
+        font-weight: 600;
+    }
+    
+    .payment-actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    
+    .empty-payments {
+        text-align: center;
+        padding: 40px 20px;
+        background-color: rgba(0,0,0,0.02);
+        border-radius: 10px;
+    }
+    
+    .empty-icon {
+        font-size: 50px;
+        color: var(--secondary);
+        margin-bottom: 20px;
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.05); opacity: 0.8; }
+        100% { transform: scale(1); opacity: 1; }
+    }
+    
+    .empty-payments h3 {
+        font-size: 24px;
+        margin-bottom: 10px;
+        color: var(--text-color);
+    }
+    
+    .empty-payments p {
+        color: #666;
+        margin-bottom: 5px;
+        max-width: 400px;
+        margin-left: auto;
+        margin-right: auto;
+    }
+    
+    .empty-tip {
+        margin-top: 15px;
+        font-style: italic;
+        font-size: 14px;
+    }
+    
+    .empty-tip a {
+        color: var(--primary);
+        text-decoration: none;
+        font-weight: 500;
+    }
+    
+    .empty-tip a:hover {
+        text-decoration: underline;
+    }
+    
+    @media (max-width: 767px) {
+        .payment-details {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        
+        .payment-info {
+            grid-template-columns: 1fr;
+        }
+        
+        .payment-actions {
+            justify-content: center;
+        }
+    }
+    </style>
+    
+    <script>
+    // Handle payment cancellation
+    document.addEventListener('DOMContentLoaded', function() {
+        const cancelButtons = document.querySelectorAll('.cancel-payment');
+        
+        cancelButtons.forEach(button => {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                if (confirm('Apakah Anda yakin ingin membatalkan pembayaran ini?')) {
+                    const orderId = this.getAttribute('data-order-id');
+                    
+                    // Here you would normally send an AJAX request to cancel the payment
+                    // For now, we'll just redirect to a hypothetical cancel endpoint
+                    window.location.href = 'cancel_payment.php?order_id=' + orderId;
+                }
+            });
+        });
+    });
+    </script>
+<?php endif; ?>
+</section>
     <script>
         // JavaScript untuk interaktivitas
         document.addEventListener('DOMContentLoaded', function() {
