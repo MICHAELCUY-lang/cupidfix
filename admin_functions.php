@@ -36,7 +36,7 @@ function updateUserActivity($userId, $conn) {
 /**
  * Get users who are currently online (active in the last X minutes)
  */
-function getOnlineUsers($conn, $minutes = 5) {
+function getOnlineUsers($conn, $minutes = 1) {
     $sql = "SELECT id, name, email, last_activity, 
             (SELECT profile_pic FROM profiles WHERE user_id = users.id) as profile_pic
             FROM users 

@@ -5,6 +5,11 @@
 require_once 'config.php';
 require_once 'payment_gateway.php';
 
+// Enable error reporting for debugging (remove in production)
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
 // Make sure user is logged in
 requireLogin();
 
@@ -22,6 +27,11 @@ $paymentGateway = new PaymentGateway();
 
 // Check payment status
 $payment = $paymentGateway->checkPaymentStatus($orderId);
+
+// Debug output (remove in production)
+// echo "<pre>Debug Payment Data: ";
+// print_r($payment);
+// echo "</pre>";
 
 // Make sure the payment exists and belongs to the current user
 if ($payment['status'] === 'not_found' || $payment['user_id'] != $userId) {
@@ -49,6 +59,33 @@ if ($payment['status'] === 'completed') {
 
 // Get client key for Midtrans frontend integration
 $clientKey = $paymentGateway->getClientKey();
+
+// Determine if we're in production mode
+$isProduction = defined('MIDTRANS_IS_PRODUCTION') ? MIDTRANS_IS_PRODUCTION : false;
+
+// Set the correct Snap.js URL based on environment
+$snapJsUrl = $isProduction 
+    ? "https://app.midtrans.com/snap/snap.js" 
+    : "https://app.sandbox.midtrans.com/snap/snap.js";
+
+// Check if we need to create a new token
+$needNewToken = !isset($payment['token']) || empty($payment['token']);
+if ($needNewToken) {
+    // Recreate payment to get a fresh token
+    $amount = $payment['amount'] ?? 15000; // Use existing amount or default to 15000
+    $newPayment = $paymentGateway->createProfileRevealPayment($userId, $targetUserId, $amount);
+    
+    if (isset($newPayment['token']) && !empty($newPayment['token'])) {
+        $payment['token'] = $newPayment['token'];
+        // Debug output (remove in production)
+        // echo "<p>Created new token: " . $payment['token'] . "</p>";
+    } else {
+        // Log error if we couldn't get a token
+        error_log("Failed to create new payment token for order ID: " . $orderId);
+        // Debug output (remove in production)
+        // echo "<p>Failed to create new token</p>";
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -58,7 +95,7 @@ $clientKey = $paymentGateway->getClientKey();
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Pembayaran Lihat Profil - Cupid</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
-    <script type="text/javascript" src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="<?php echo $clientKey; ?>"></script>
+    <script type="text/javascript" src="<?php echo $snapJsUrl; ?>" data-client-key="<?php echo $clientKey; ?>"></script>
     <style>
         :root {
             --primary: #ff4b6e;
@@ -273,6 +310,21 @@ $clientKey = $paymentGateway->getClientKey();
             text-align: center;
             margin-top: 30px;
         }
+
+        .alert {
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            color: #721c24;
+            background-color: #f8d7da;
+            border: 1px solid #f5c6cb;
+        }
+
+        .alert-success {
+            color: #155724;
+            background-color: #d4edda;
+            border-color: #c3e6cb;
+        }
     </style>
 </head>
 <body>
@@ -303,9 +355,23 @@ $clientKey = $paymentGateway->getClientKey();
                     <h1>Lihat Profil Lengkap</h1>
                 </div>
                 
+                <?php if (isset($_GET['error'])): ?>
+                <div class="alert">
+                    <i class="fas fa-exclamation-circle"></i>
+                    <?php echo htmlspecialchars($_GET['error']); ?>
+                </div>
+                <?php endif; ?>
+
+                <?php if (!isset($payment['token']) || empty($payment['token'])): ?>
+                <div class="alert">
+                    <i class="fas fa-exclamation-circle"></i>
+                    Terjadi masalah dengan token pembayaran. Silakan coba lagi nanti atau hubungi support.
+                </div>
+                <?php endif; ?>
+                
                 <div class="user-preview">
                     <div class="user-avatar">
-                        <img src="<?php echo !empty($targetUser['profile_pic']) ? htmlspecialchars($targetUser['profile_pic']) : '/api/placeholder/60/60'; ?>" alt="User Avatar">
+                        <img src="<?php echo !empty($targetUser['profile_pic']) ? htmlspecialchars($targetUser['profile_pic']) : 'assets/images/user_profile.png'; ?>" alt="User Avatar">
                     </div>
                     <div class="user-info">
                         <h3><?php echo htmlspecialchars($targetUser['name']); ?></h3>
@@ -335,7 +401,7 @@ $clientKey = $paymentGateway->getClientKey();
                     </div>
                     <div class="row">
                         <div class="label">Harga:</div>
-                        <div class="value price-highlight">Rp 15.000</div>
+                        <div class="value price-highlight">Rp <?php echo number_format($payment['amount'] ?? 15000, 0, ',', '.'); ?></div>
                     </div>
                 </div>
                 
@@ -351,22 +417,41 @@ $clientKey = $paymentGateway->getClientKey();
     <script type="text/javascript">
         // For Midtrans Snap integration
         document.getElementById('pay-button').addEventListener('click', function() {
+            console.log('Pay button clicked');
+            // Check token
+            const token = '<?php echo $payment["token"] ?? ""; ?>';
+            if (!token) {
+                console.error('No payment token available');
+                alert('Token pembayaran tidak tersedia. Silakan refresh halaman atau coba lagi nanti.');
+                return;
+            }
+            
+            console.log('Using token:', token);
+            
             // Call SNAP API with transaction token
-            snap.pay('<?php echo $payment["token"] ?? ""; ?>', {
-                onSuccess: function(result) {
-                    window.location.href = 'payment_callback.php?status=finish&order_id=<?php echo $orderId; ?>';
-                },
-                onPending: function(result) {
-                    window.location.href = 'payment_callback.php?status=pending&order_id=<?php echo $orderId; ?>';
-                },
-                onError: function(result) {
-                    window.location.href = 'payment_callback.php?status=error&order_id=<?php echo $orderId; ?>';
-                },
-                onClose: function() {
-                    // Handle customer closing the popup without finishing payment
-                    alert('Pembayaran belum selesai. Silakan selesaikan pembayaran Anda.');
-                }
-            });
+            try {
+                snap.pay(token, {
+                    onSuccess: function(result) {
+                        console.log('Payment success:', result);
+                        window.location.href = 'payment_callback.php?status=finish&order_id=<?php echo $orderId; ?>&transaction_status=settlement';
+                    },
+                    onPending: function(result) {
+                        console.log('Payment pending:', result);
+                        window.location.href = 'payment_callback.php?status=pending&order_id=<?php echo $orderId; ?>&transaction_status=pending';
+                    },
+                    onError: function(result) {
+                        console.error('Payment error:', result);
+                        window.location.href = 'payment_callback.php?status=error&order_id=<?php echo $orderId; ?>&transaction_status=deny';
+                    },
+                    onClose: function() {
+                        console.log('Customer closed the popup without finishing payment');
+                        alert('Pembayaran belum selesai. Silakan selesaikan pembayaran Anda.');
+                    }
+                });
+            } catch (error) {
+                console.error('Error calling snap.pay:', error);
+                alert('Terjadi kesalahan saat memproses pembayaran. Silakan coba lagi.');
+            }
         });
     </script>
 </body>
