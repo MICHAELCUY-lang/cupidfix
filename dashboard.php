@@ -418,28 +418,6 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <!-- PWA Meta Tags -->
-    <meta name="theme-color" content="#ff4b6e">
-    <meta name="description" content="Cupid Dashboard - Temukan pasanganmu di sini">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Cupid">
-
-    <!-- PWA Manifest -->
-    <link rel="manifest" href="/manifest.json">
-
-    <!-- iOS Icons -->
-    <link rel="apple-touch-icon" href="assets/images/icons/icon-72x72.png" sizes="72x72">
-    <link rel="apple-touch-icon" href="assets/images/icons/icon-96x96.png" sizes="96x96">
-    <link rel="apple-touch-icon" href="assets/images/icons/icon-128x128.png" sizes="128x128">
-    <link rel="apple-touch-icon" href="assets/images/icons/icon-144x144.png" sizes="144x144">
-    <link rel="apple-touch-icon" href="assets/images/icons/icon-152x152.png" sizes="152x152">
-    <link rel="apple-touch-icon" href="assets/images/icons/icon-192x192.png" sizes="192x192">
-    <link rel="apple-touch-icon" href="assets/images/icons/icon-384x384.png" sizes="384x384">
-    <link rel="apple-touch-icon" href="assets/images/icons/icon-512x512.png" sizes="512x512">
-
-    <!-- Favicon -->
-    <link rel="icon" type="image/png" href="assets/images/icons/icon-72x72.png">
     <title>Cupid - Dashboard</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
     <link href="assets/css/style.css" rel="stylesheet">
@@ -1548,31 +1526,6 @@ tr:hover {
     
     nav ul {
         margin-top: 10px;
-    }
-}
-
-.pwa-install {
-    display: none; /* Hidden by default, shown via JavaScript */
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0% {
-        box-shadow: 0 0 0 0 rgba(255, 75, 110, 0.7);
-    }
-    70% {
-        box-shadow: 0 0 0 10px rgba(255, 75, 110, 0);
-    }
-    100% {
-        box-shadow: 0 0 0 0 rgba(255, 75, 110, 0);
-    }
-}
-
-/* Dark theme compatibility for PWA */
-@media (prefers-color-scheme: dark) {
-    .pwa-install {
-        background-color: #ff6b8a;
     }
 }
     </style>
@@ -3415,9 +3368,6 @@ document.addEventListener('DOMContentLoaded', function() {
     </script>
 <?php endif; ?>
 </section>
-<button id="add-to-home" class="btn btn-primary pwa-install" style="position: fixed; bottom: 20px; right: 20px; z-index: 999; display: none;">
-    <i class="fas fa-download"></i> Pasang App
-</button>
     <script>
         // JavaScript untuk interaktivitas
         document.addEventListener('DOMContentLoaded', function() {
