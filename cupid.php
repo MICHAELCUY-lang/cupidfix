@@ -4,6 +4,29 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Cupid - Temukan Pasanganmu</title>
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#ff4b6e">
+    <meta name="description" content="Platform dimana kamu dapat menemukan pasangan yang cocok berdasarkan ketertarikan, hobi, dan tujuan yang sama.">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Cupid">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="/manifest.json">
+    
+    <!-- iOS Icons -->
+    <link rel="apple-touch-icon" href="assets/images/icons/icon-72x72.png" sizes="72x72">
+    <link rel="apple-touch-icon" href="assets/images/icons/icon-96x96.png" sizes="96x96">
+    <link rel="apple-touch-icon" href="assets/images/icons/icon-128x128.png" sizes="128x128">
+    <link rel="apple-touch-icon" href="assets/images/icons/icon-144x144.png" sizes="144x144">
+    <link rel="apple-touch-icon" href="assets/images/icons/icon-152x152.png" sizes="152x152">
+    <link rel="apple-touch-icon" href="assets/images/icons/icon-192x192.png" sizes="192x192">
+    <link rel="apple-touch-icon" href="assets/images/icons/icon-384x384.png" sizes="384x384">
+    <link rel="apple-touch-icon" href="assets/images/icons/icon-512x512.png" sizes="512x512">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="assets/images/icons/icon-72x72.png">
+    
     <style>
         :root {
             --primary: #ff4b6e;
@@ -230,40 +253,18 @@
             gap: 30px;
         }
         
-        .feature-card {
-            background-color: var(--light);
-            border-radius: 10px;
-            padding: 30px;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
-            transition: transform 0.3s, box-shadow 0.3s;
+        .feature-box {
             text-align: center;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
+            padding: 20px;
+            background-color: var(--card-bg);
+            border-radius: 10px;
+            box-shadow: var(--card-shadow);
+            transition: transform 0.3s, box-shadow 0.3s;
         }
         
-        .feature-card:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 15px 30px rgba(0, 0, 0, 0.1);
-        }
-        
-        .feature-icon {
-            font-size: 50px;
-            color: var(--primary);
-            margin-bottom: 20px;
-        }
-        
-        .feature-card h3 {
-            font-size: 22px;
-            margin-bottom: 15px;
-            color: var(--dark);
-        }
-        
-        .feature-card p {
-            font-size: 16px;
-            color: #666;
-            margin-bottom: 20px;
-            flex-grow: 1;
+        .feature-box:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
         }
         
         footer {
@@ -322,6 +323,15 @@
             text-align: center;
             font-size: 14px;
             color: #aaa;
+        }
+        
+        /* Add to Home Screen button */
+        .pwa-install {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 999;
+            display: none;
         }
         
         /* Media Queries */
@@ -617,6 +627,11 @@
         </div>
     </section>
     
+    <!-- Add to Home Screen Button -->
+    <button id="add-to-home" class="btn pwa-install">
+        <i class="fas fa-download"></i> Pasang App
+    </button>
+    
     <!-- Footer -->
     <footer>
         <div class="container">
@@ -722,5 +737,6 @@
             });
         });
     </script>
-</body>
-</html>
+    
+    <!-- PWA Scripts -->
+    <script src="/pwa-init.js"></script>
