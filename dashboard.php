@@ -918,9 +918,183 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                 margin-bottom: 15px;
             }
         }
+        
+            /* Light Theme (Default) */
+    :root {
+        --primary: #ff4b6e;
+        --secondary: #ffd9e0;
+        --dark: #333333;
+        --light: #ffffff;
+        --accent: #ff8fa3;
+        --text-color: #333333;
+        --bg-color: #f9f9f9;
+        --card-bg: #ffffff;
+        --card-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+        --border-color: #eeeeee;
+        --input-bg: #ffffff;
+        --input-border: #dddddd;
+    }
+
+    /* Dark Theme */
+    [data-theme="dark"] {
+        --primary: #ff6b8a; /* slightly lighter for better contrast */
+        --secondary: #662d39;
+        --dark: #f5f5f5;
+        --light: #222222;
+        --accent: #ff8fa3;
+        --text-color: #f5f5f5;
+        --bg-color: #121212;
+        --card-bg: #1e1e1e;
+        --card-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        --border-color: #333333;
+        --input-bg: #2a2a2a;
+        --input-border: #444444;
+    }
+
+    /* Apply theme variables to elements */
+    body {
+        background-color: var(--bg-color);
+        color: var(--text-color);
+        transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    .card, .profile-section, .chat-messages, .chat-header, .chat-input, header {
+        background-color: var(--card-bg);
+        box-shadow: var(--card-shadow);
+        transition: background-color 0.3s ease, box-shadow 0.3s ease;
+    }
+
+    input, textarea, select {
+        background-color: var(--input-bg);
+        border-color: var(--input-border);
+        color: var(--text-color);
+        transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+    }
+
+    header, .logo {
+        color: var(--primary);
+    }
+
+    nav ul li a {
+        color: var(--text-color);
+    }
+
+    /* Theme Toggle Button */
+    .theme-toggle {
+        margin-left: 15px;
+        display: flex;
+        align-items: center;
+    }
+
+    #theme-toggle-btn {
+        background: none;
+        border: none;
+        font-size: 20px;
+        cursor: pointer;
+        color: var(--primary);
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.3s ease;
+        position: relative;
+        overflow: hidden;
+    }
+
+    #theme-toggle-btn:hover {
+        background-color: rgba(255, 75, 110, 0.1);
+    }
+
+    /* Show/hide sun and moon icons based on theme */
+    #theme-toggle-btn .fa-moon {
+        display: block;
+        position: absolute;
+        transform: translateY(0);
+        opacity: 1;
+        transition: all 0.3s ease;
+    }
+
+    #theme-toggle-btn .fa-sun {
+        display: block;
+        position: absolute;
+        transform: translateY(30px);
+        opacity: 0;
+        transition: all 0.3s ease;
+    }
+
+    [data-theme="dark"] #theme-toggle-btn .fa-moon {
+        transform: translateY(-30px);
+        opacity: 0;
+    }
+
+    [data-theme="dark"] #theme-toggle-btn .fa-sun {
+        transform: translateY(0);
+        opacity: 1;
+    }
+
+    /* Additional dark mode adjustments */
+    [data-theme="dark"] .btn-outline {
+        border-color: var(--primary);
+    }
+
+    [data-theme="dark"] .menfess-card,
+    [data-theme="dark"] .option,
+    [data-theme="dark"] .user-preview {
+        background-color: var(--card-bg);
+    }
+
+    [data-theme="dark"] .message.received .message-content {
+        background-color: #2a2a2a;
+    }
+
+    [data-theme="dark"] .menfess-card.received {
+        background-color: #252525;
+    }
+    
+    [data-theme="dark"] .sidebar {
+    background-color: var(--card-bg);
+    }
+    
+    [data-theme="dark"] .feature-box {
+        background-color: var(--card-bg) !important;
+    }
+    
+    [data-theme="dark"] .menfess-card.sent {
+        background-color: var(--secondary);
+    }
+    
+    [data-theme="dark"] .score-details {
+        background-color: var(--card-bg) !important;
+    }
+    [data-theme="dark"] body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+        [data-theme="dark"] body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    }
+    
+    [data-theme="dark"] .sidebar,
+    [data-theme="dark"] .card,
+    [data-theme="dark"] .feature-box,
+    [data-theme="dark"] .dashboard,
+    [data-theme="dark"] .chat-item,
+    [data-theme="dark"] .user-card {
+        background-color: var(--card-bg);
+    }
+    
+    [data-theme="dark"] li, 
+    [data-theme="dark"] p, 
+    [data-theme="dark"] span, 
+    [data-theme="dark"] div {
+        color: var(--text-color);
+    }
     </style>
 </head>
 <body>
+    
     <!-- Header -->
     <header>
         <div class="container">
@@ -930,6 +1104,12 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                 </a>
                 <nav>
                     <ul>
+                            <div class="theme-toggle">
+    <button id="theme-toggle-btn" aria-label="Toggle dark mode">
+        <i class="fas fa-moon"></i>
+        <i class="fas fa-sun"></i>
+    </button>
+</div>
                         <li><a href="dashboard.php">Dashboard</a></li>
                         <li>
                             <a href="logout.php" class="btn btn-outline">Keluar</a>
@@ -1073,19 +1253,19 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                                 <h3>Fitur Utama</h3>
                             </div>
                             <div class="features-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-top: 20px;">
-                                <div class="feature-box" style="text-align: center; padding: 20px; background-color: #f9f9f9; border-radius: 10px;">
+                                <div class="feature-box" style="text-align: center; padding: 20px; background-color: var(--bg-color); border-radius: 10px;">
                                     <i class="fas fa-mask" style="font-size: 40px; color: var(--primary); margin-bottom: 15px;"></i>
                                     <h4>Anonymous Crush Menfess</h4>
                                     <p style="margin-bottom: 15px;">Kirim pesan anonim ke crush kamu!</p>
                                     <a href="?page=menfess" class="btn btn-outline">Kirim Menfess</a>
                                 </div>
-                                <div class="feature-box" style="text-align: center; padding: 20px; background-color: #f9f9f9; border-radius: 10px;">
+                                <div class="feature-box" style="text-align: center; padding: 20px; background-color: var(--bg-color); border-radius: 10px;">
                                     <i class="fas fa-comments" style="font-size: 40px; color: var(--primary); margin-bottom: 15px;"></i>
                                     <h4>Blind Chat</h4>
                                     <p style="margin-bottom: 15px;">Chat dengan mahasiswa acak!</p>
                                     <a href="?page=chat" class="btn btn-outline">Mulai Chat</a>
                                 </div>
-                                <div class="feature-box" style="text-align: center; padding: 20px; background-color: #f9f9f9; border-radius: 10px;">
+                                <div class="feature-box" style="text-align: center; padding: 20px; background-color: var(--bg-color); border-radius: 10px;">
                                     <i class="fas fa-clipboard-check" style="font-size: 40px; color: var(--primary); margin-bottom: 15px;"></i>
                                     <h4>Compatibility Test</h4>
                                     <p style="margin-bottom: 15px;">Temukan kecocokan berdasarkan kepribadian!</p>
@@ -1586,7 +1766,7 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                             </div>
                             <p>Berdasarkan jawaban dan profil Anda, kami telah menemukan orang-orang yang cocok dengan Anda.</p>
                             
-                            <div class="score-details" style="display: flex; justify-content: space-between; padding: 10px 15px; background-color: #f8f8f8; border-radius: 5px; margin-bottom: 15px;">
+                            <div class="score-details" style="display: flex; justify-content: space-between; padding: 10px 15px; background-color: var(--card-bg); border-radius: 5px; margin-bottom: 15px;">
                                 <div class="score-item" style="text-align: center;">
                                     <div class="score-value" style="font-size: 18px; font-weight: 500; color: var(--primary);"><?php echo isset($test_results['personality_score']) ? round($test_results['personality_score']) : '0'; ?></div>
                                     <div class="score-label" style="font-size: 12px; color: #666;">Skor Kepribadian</div>
@@ -1836,6 +2016,38 @@ $page = isset($_GET['page']) ? $_GET['page'] : 'dashboard';
                 });
             }
         });
+        
+    // Function to toggle between light and dark themes
+    function toggleTheme() {
+        const currentTheme = document.documentElement.getAttribute('data-theme') || 'light';
+        const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+        
+        // Set theme on document
+        document.documentElement.setAttribute('data-theme', newTheme);
+        
+        // Save theme preference to localStorage
+        localStorage.setItem('cupid-theme', newTheme);
+    }
+    
+    // Initialize theme based on saved preference
+    function initTheme() {
+        const savedTheme = localStorage.getItem('cupid-theme');
+        if (savedTheme) {
+            document.documentElement.setAttribute('data-theme', savedTheme);
+        }
+    }
+    
+    // Add event listener to theme toggle button
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize theme
+        initTheme();
+        
+        // Add event listener to theme toggle button
+        const themeToggleBtn = document.getElementById('theme-toggle-btn');
+        if (themeToggleBtn) {
+            themeToggleBtn.addEventListener('click', toggleTheme);
+        }
+    });
     </script>
 </body>
 </html>
